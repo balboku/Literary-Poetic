@@ -3,7 +3,7 @@ import { z } from "zod";
 // ─── Inspiration Rescue ───────────────────────────────────────────────────────
 
 export const inspirationRequestSchema = z.object({
-  topic: z.string().min(4).max(3000),
+  topic: z.string().min(4).max(120000),
   contentFormat: z
     .enum(["longform", "short_video", "youtube", "campaign"])
     .default("longform"),

@@ -65,6 +65,8 @@ const contentFormats = [
   { value: "campaign", label: "行銷活動" },
 ] as const;
 
+const MAX_CHARS = 120000;
+
 export default function InspirationRescuePanel({
   apiEndpoint = "/api/inspiration-rescue",
   initialTopic = "",
@@ -83,7 +85,8 @@ export default function InspirationRescuePanel({
     [format],
   );
 
-  const canSubmit = topic.trim().length >= 4 && !isLoading;
+  const charCount = topic.length;
+  const canSubmit = charCount >= 4 && charCount <= MAX_CHARS && !isLoading;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -104,7 +107,8 @@ export default function InspirationRescuePanel({
       });
 
       if (!response.ok) {
-        throw new Error("Balbo 的黃銅管線暫時塞住了，請稍後再試。");
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Balbo 的黃銅管線暫時塞住了，請稍後再試。");
       }
 
       const data = normalizeResponse(await response.json());
@@ -161,7 +165,20 @@ export default function InspirationRescuePanel({
                 placeholder="例：我想做 AI 寫作工具的內容，但每篇都像規格表。"
                 value={topic}
                 onChange={(event) => setTopic(event.target.value)}
+                maxLength={MAX_CHARS}
               />
+              <div className="mt-1.5 flex justify-end">
+                <p
+                  className={[
+                    "text-xs tabular-nums",
+                    charCount > MAX_CHARS * 0.95
+                      ? "text-[#ff8f8f]"
+                      : "text-[#f6ead4]/45",
+                  ].join(" ")}
+                >
+                  {charCount.toLocaleString()} / {MAX_CHARS.toLocaleString()}
+                </p>
+              </div>
             </div>
 
             <fieldset>

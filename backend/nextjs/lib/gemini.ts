@@ -81,13 +81,22 @@ async function generateStructured<T>({
     throw new Error("Gemini returned an empty response.");
   }
 
-  return {
-    output: schema.parse(JSON.parse(text)),
-    modelName,
-    latencyMs: Date.now() - startedAt,
-    usage: normalizeUsage(response),
-    rawResponse: response,
-  };
+  try {
+    return {
+      output: schema.parse(JSON.parse(text)),
+      modelName,
+      latencyMs: Date.now() - startedAt,
+      usage: normalizeUsage(response),
+      rawResponse: response,
+    };
+  } catch (err) {
+    console.error(`[Gemini Schema Validation Error] Model: ${modelName}`);
+    console.error("Raw Text:", text);
+    if (err instanceof z.ZodError) {
+      console.error("Zod Issues:", JSON.stringify(err.issues, null, 2));
+    }
+    throw err;
+  }
 }
 
 export function generateInspirationRescue(

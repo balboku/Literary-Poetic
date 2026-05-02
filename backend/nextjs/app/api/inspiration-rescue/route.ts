@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
       ...result.output,
     });
   } catch (error) {
+    console.error("[Inspiration Rescue API Error]:", error);
     await failServiceRun({
       runId,
       errorMessage: error instanceof Error ? error.message : "Unknown error",
