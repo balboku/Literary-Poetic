@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+// ─── Agentic Clarification ────────────────────────────────────────────────────
+export const agenticClarificationSchema = z.object({
+  needsClarification: z.boolean().default(false),
+  clarificationQuestion: z.string().optional(),
+});
+
 // ─── Inspiration Rescue ───────────────────────────────────────────────────────
 
 export const inspirationRequestSchema = z.object({
@@ -15,46 +21,55 @@ export const crossDomainFactSchema = z.object({
   unexpectedLink: z.string(),
   firstSentenceHook: z.string(),
   contentAngle: z.string(),
+  trendIntegration: z.string(),
   balboAside: z.string(),
 });
 
 export const storySeedSchema = z.object({
   title: z.string(),
   hook: z.string(),
-  outline: z.array(z.string()).min(3).max(3),
+  outline: z.array(z.string()),
   format: z.string(),
   visualCue: z.string(),
+  imagePrompt: z.string(),
+  trendIntegration: z.string(),
   riskAndFix: z.string(),
 });
 
-export const inspirationRescueSchema = z.object({
-  balboOpening: z.string(),
-  crossDomainFacts: z.array(crossDomainFactSchema).min(3).max(3),
-  storySeeds: z.array(storySeedSchema).min(3).max(3),
-  balboClosing: z.string(),
+export const inspirationRescueSchema = agenticClarificationSchema.extend({
+  balboOpening: z.string().optional(),
+  crossDomainFacts: z.array(crossDomainFactSchema).optional(),
+  storySeeds: z.array(storySeedSchema).optional(),
+  balboClosing: z.string().optional(),
 });
 
 // ─── Data Story ─────────────────────────────────────────────────────────────
 
 export const dataStoryRequestSchema = z.object({
   inputText: z.string().min(20).max(120000),
-  style: z.string().default("一般大眾"),
 });
 
-export const dataStorySchema = z.object({
-  balboOpening: z.string(),
-  boringReality: z.string(),
-  balboTranslation: z.string(),
+export const dataStoryVersionSchema = z.object({
   analogy: z.string(), // 【大叔的白話文翻譯】
   storyCopy: z.string(), // 【萬花筒故事文案】
-  slogans: z.array(z.string()).min(1).max(2), // 【吸睛金句】
-  balboClosing: z.string(),
+  slogans: z.array(z.string()), // 【吸睛金句】
+});
+
+export const dataStorySchema = agenticClarificationSchema.extend({
+  balboOpening: z.string().optional(),
+  boringReality: z.string().optional(),
+  balboTranslation: z.string().optional(),
+  investorVersion: dataStoryVersionSchema.optional(),
+  customerVersion: dataStoryVersionSchema.optional(),
+  grandmaVersion: dataStoryVersionSchema.optional(),
+  balboClosing: z.string().optional(),
 });
 
 // ─── Logic Compass ───────────────────────────────────────────────────────────
 
 export const logicCompassRequestSchema = z.object({
   businessModel: z.string().min(20).max(120000),
+  personaMask: z.enum(["vc", "hater", "balbo"]).default("balbo"),
 });
 
 export const sharpQuestionSchema = z.object({
@@ -62,13 +77,14 @@ export const sharpQuestionSchema = z.object({
   balboHint: z.string(),
 });
 
-export const logicCompassSchema = z.object({
-  balboOpening: z.string(), // 高度肯定
-  logicalContradictions: z.array(z.string()).min(1), // 【羅盤指針偏移】
-  marketOptimismRisks: z.array(z.string()).min(1), // 【迷霧警報】
-  sharpQuestions: z.array(sharpQuestionSchema).min(3).max(3), // 【大叔的靈魂拷問】
-  pivotSuggestion: z.string(), // 救生圈：軸心轉向建議
-  balboClosing: z.string(), // 回覆結語
+export const logicCompassSchema = agenticClarificationSchema.extend({
+  balboOpening: z.string().optional(), // 高度肯定
+  logicalContradictions: z.array(z.string()).optional(), // 【羅盤指針偏移】
+  marketOptimismRisks: z.array(z.string()).optional(), // 【迷霧警報】
+  doomScenario: z.string().optional(), // 【毀滅劇本】
+  sharpQuestions: z.array(sharpQuestionSchema).optional(), // 【大叔的靈魂拷問】
+  pivotSuggestion: z.string().optional(), // 救生圈：軸心轉向建議
+  balboClosing: z.string().optional(), // 回覆結語
 });
 
 // ─── Types ───────────────────────────────────────────────────────────────────
