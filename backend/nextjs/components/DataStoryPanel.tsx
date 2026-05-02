@@ -12,6 +12,8 @@ import {
   Upload,
   X,
   Zap,
+  Bookmark,
+  CheckCircle2,
 } from "lucide-react";
 import { experimental_useObject as useObject } from "@ai-sdk/react";
 import { dataStorySchema } from "../lib/ai-schemas";
@@ -48,6 +50,12 @@ type DataStoryResponse = {
   balboClosing?: string;
 };
 
+type PartialDataStoryVersion = {
+  analogy?: string;
+  storyCopy?: string;
+  slogans?: (string | undefined)[];
+};
+
 type DataStoryPanelProps = {
   apiEndpoint?: string;
 };
@@ -71,6 +79,7 @@ export default function DataStoryPanel({
   const [isDragging, setIsDragging] = useState(false);
   const [clarificationReply, setClarificationReply] = useState("");
   const [activeTab, setActiveTab] = useState<"investor" | "customer" | "grandma">("investor");
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { object: streamedObject, submit, isLoading: isStreaming } = useObject({
@@ -84,7 +93,7 @@ export default function DataStoryPanel({
     },
   });
 
-  const displayResult = streamedObject || result;
+  const displayResult = (streamedObject as unknown as DataStoryResponse) || result;
   const isLoading = isStreaming;
 
   const charCount =
@@ -211,6 +220,61 @@ export default function DataStoryPanel({
       inputText: clarificationReply.trim(),
       messages: updatedMessages,
     });
+  }
+
+  function showToast(text: string, type: "success" | "error" = "success") {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  }
+
+  async function handleSaveFavorite() {
+    if (!displayResult) return;
+    
+    let versionData: PartialDataStoryVersion | undefined;
+    if (activeTab === "investor") versionData = displayResult.investorVersion as PartialDataStoryVersion;
+    if (activeTab === "customer") versionData = displayResult.customerVersion as PartialDataStoryVersion;
+    if (activeTab === "grandma") versionData = displayResult.grandmaVersion as PartialDataStoryVersion;
+
+    if (!versionData || isLoading) {
+      return;
+    }
+
+    try {
+      // 假設我們有使用 Auth 機制，在 Header 帶上 token。
+      // 如果使用 cookies 的話就不用自己帶 header。
+      // 這裡直接戳我們新建的 API：
+      const token = localStorage.getItem("sb-access-token"); // 依據實際 auth 實作可調整，或依賴 cookie
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const res = await fetch("/api/favorites/data-story", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          run_id: displayResult.runId || null,
+          version_type: activeTab,
+          content: versionData
+        })
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          showToast("請先登入才能使用收藏功能", "error");
+        } else {
+          showToast("收藏失敗，請稍後再試", "error");
+        }
+        return;
+      }
+
+      showToast("已成功收藏此版本！");
+    } catch (err) {
+      console.error("Save favorite error:", err);
+      showToast("收藏失敗，請稍後再試", "error");
+    }
   }
 
   return (
@@ -442,6 +506,7 @@ export default function DataStoryPanel({
                     version={displayResult.investorVersion}
                     label="投資人視角"
                     isLoading={isLoading}
+                    onSave={handleSaveFavorite}
                   />
                 )}
                 {activeTab === "customer" && (
@@ -449,6 +514,7 @@ export default function DataStoryPanel({
                     version={displayResult.customerVersion}
                     label="消費者視角"
                     isLoading={isLoading}
+                    onSave={handleSaveFavorite}
                   />
                 )}
                 {activeTab === "grandma" && (
@@ -456,6 +522,7 @@ export default function DataStoryPanel({
                     version={displayResult.grandmaVersion}
                     label="長輩視角"
                     isLoading={isLoading}
+                    onSave={handleSaveFavorite}
                   />
                 )}
               </div>
@@ -470,6 +537,19 @@ export default function DataStoryPanel({
           ) : null}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 shadow-lg ${toastMessage.type === "success" ? "border-[#7ee7da]/30 bg-[#14343a] text-[#7ee7da]" : "border-[#ff8f8f]/30 bg-[#3b1717] text-[#ff8f8f]"}`}>
+            {toastMessage.type === "success" ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+            <span className="text-sm font-medium">{toastMessage.text}</span>
+            <button onClick={() => setToastMessage(null)} className="ml-2 hover:opacity-70">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -528,17 +608,30 @@ function VersionCard({
   version,
   label,
   isLoading,
+  onSave,
 }: {
-  version?: DataStoryVersion;
+  version?: PartialDataStoryVersion;
   label: string;
   isLoading?: boolean;
+  onSave?: () => void;
 }) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-300">
       <section>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
-          {label}的比喻
-        </p>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
+            {label}的比喻
+          </p>
+          <button
+            onClick={onSave}
+            disabled={isLoading || !version}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-[#f6ead4]/60 transition hover:bg-[#d6a85d]/10 hover:text-[#d6a85d] disabled:opacity-50"
+            title="收藏此版本"
+          >
+            <Bookmark className="h-3.5 w-3.5" />
+            <span>收藏此版本</span>
+          </button>
+        </div>
         <div className="rounded-lg border border-[#b98f49]/30 bg-[#171b26] p-4">
           <p className="text-base italic leading-7 text-[#f6ead4]/90">
             「<StreamingText text={version?.analogy} isLoading={isLoading} />」
@@ -572,7 +665,7 @@ function VersionCard({
                 <p className="text-sm font-medium text-[#f6ead4]">{slogan}</p>
                 <button
                   className="ml-auto text-[#f6ead4]/40 hover:text-[#7ee7da]"
-                  onClick={() => navigator.clipboard?.writeText(slogan)}
+                  onClick={() => navigator.clipboard?.writeText(slogan || "")}
                   title="複製金句"
                 >
                   <Clipboard className="h-3.5 w-3.5" />

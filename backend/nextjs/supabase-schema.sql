@@ -149,6 +149,42 @@ create index if not exists inspiration_favorites_user_id_idx
 create index if not exists inspiration_favorites_created_at_idx
   on public.inspiration_favorites(created_at desc);
 
+-- ── 數據故事收藏夾 ───────────────────────────────────────────────────────────────
+-- 儲存用戶收藏的枯燥數據白話文版本
+
+create table if not exists public.data_story_favorites (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  run_id       uuid references public.service_runs(id) on delete set null,
+  version_type text not null,   -- 'investor' | 'customer' | 'grandma'
+  content      jsonb not null,  -- DataStoryVersion object
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists data_story_favorites_user_id_idx
+  on public.data_story_favorites(user_id);
+
+create index if not exists data_story_favorites_created_at_idx
+  on public.data_story_favorites(created_at desc);
+
+-- ── 邏輯指南針收藏夾 ─────────────────────────────────────────────────────────────
+-- 儲存用戶收藏的邏輯指南針分析結果
+
+create table if not exists public.logic_compass_favorites (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  run_id       uuid references public.service_runs(id) on delete set null,
+  topic        text not null,
+  content      jsonb not null,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists logic_compass_favorites_user_id_idx
+  on public.logic_compass_favorites(user_id);
+
+create index if not exists logic_compass_favorites_created_at_idx
+  on public.logic_compass_favorites(created_at desc);
+
 -- ===========================================================================
 -- Row Level Security (RLS) 設定
 -- ===========================================================================
@@ -162,6 +198,8 @@ alter table public.model_invocations      enable row level security;
 alter table public.usage_ledger           enable row level security;
 alter table public.payment_events         enable row level security;
 alter table public.inspiration_favorites  enable row level security;
+alter table public.data_story_favorites   enable row level security;
+alter table public.logic_compass_favorites enable row level security;
 
 -- subscriptions：只能讀自己的
 
@@ -192,6 +230,28 @@ create policy "inspiration_favorites_insert_own" on public.inspiration_favorites
   for insert with check (auth.uid() = user_id);
 
 create policy "inspiration_favorites_delete_own" on public.inspiration_favorites
+  for delete using (auth.uid() = user_id);
+
+-- data_story_favorites：用戶可以讀寫自己的收藏
+
+create policy "data_story_favorites_select_own" on public.data_story_favorites
+  for select using (auth.uid() = user_id);
+
+create policy "data_story_favorites_insert_own" on public.data_story_favorites
+  for insert with check (auth.uid() = user_id);
+
+create policy "data_story_favorites_delete_own" on public.data_story_favorites
+  for delete using (auth.uid() = user_id);
+
+-- logic_compass_favorites：用戶可以讀寫自己的收藏
+
+create policy "logic_compass_favorites_select_own" on public.logic_compass_favorites
+  for select using (auth.uid() = user_id);
+
+create policy "logic_compass_favorites_insert_own" on public.logic_compass_favorites
+  for insert with check (auth.uid() = user_id);
+
+create policy "logic_compass_favorites_delete_own" on public.logic_compass_favorites
   for delete using (auth.uid() = user_id);
 
 -- payment_events：僅 service role 可操作（no user policy = blocked for all users）
@@ -238,4 +298,6 @@ create trigger credit_wallets_updated_at
 --   usage_ledger           · 帳本（Stripe meter 對帳用）
 --   payment_events         · Stripe webhook 事件冪等記錄
 --   inspiration_favorites  · 靈感收藏夾
+--   data_story_favorites   · 數據故事收藏夾
+--   logic_compass_favorites· 邏輯指南針收藏夾
 -- ===========================================================================
