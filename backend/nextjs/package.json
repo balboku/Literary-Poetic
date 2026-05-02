@@ -8,8 +8,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.67",
+    "@ai-sdk/react": "^3.0.176",
     "@google/genai": "latest",
     "@supabase/supabase-js": "latest",
+    "ai": "^6.0.174",
     "lucide-react": "^0.468.0",
     "mammoth": "^1.12.0",
     "next": "latest",
@@ -18,7 +21,8 @@
     "react-dom": "latest",
     "stripe": "latest",
     "xlsx": "^0.18.5",
-    "zod": "latest"
+    "zod": "latest",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@types/node": "latest",

@@ -13,6 +13,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { experimental_useObject as useObject } from "@ai-sdk/react";
+import { dataStorySchema } from "../lib/ai-schemas";
 import { parseFileToText } from "../lib/file-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -66,11 +68,24 @@ export default function DataStoryPanel({
   const [messages, setMessages] = useState<Message[]>([]);
   const [result, setResult] = useState<DataStoryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [clarificationReply, setClarificationReply] = useState("");
   const [activeTab, setActiveTab] = useState<"investor" | "customer" | "grandma">("investor");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { object: streamedObject, submit, isLoading: isStreaming } = useObject({
+    api: apiEndpoint,
+    schema: dataStorySchema,
+    onError: (err) => setError(err.message),
+    onFinish: ({ object }) => {
+      if (object) {
+        setResult(object as DataStoryResponse);
+      }
+    },
+  });
+
+  const displayResult = streamedObject || result;
+  const isLoading = isStreaming;
 
   const charCount =
     inputText.length +
@@ -174,57 +189,28 @@ export default function DataStoryPanel({
       { role: "user", content: combinedContent.trim() },
     ];
     setMessages(initialMessages);
-    await submitToApi(initialMessages);
+    setError(null);
+    setResult(null);
+    submit({ inputText: combinedContent.trim(), messages: initialMessages });
   }
 
   async function handleClarificationSubmit() {
-    if (!clarificationReply.trim() || isLoading || !result?.clarificationQuestion) return;
+    if (!clarificationReply.trim() || isLoading || !displayResult?.clarificationQuestion) return;
 
     const updatedMessages: Message[] = [
       ...messages,
-      { role: "assistant", content: result.clarificationQuestion },
+      { role: "assistant", content: displayResult.clarificationQuestion },
       { role: "user", content: clarificationReply.trim() },
     ];
 
     setMessages(updatedMessages);
     setClarificationReply("");
-    await submitToApi(updatedMessages);
-  }
-
-  async function submitToApi(apiMessages: Message[]) {
-    setIsLoading(true);
     setError(null);
     setResult(null);
-
-    try {
-      const response = await fetch(apiEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inputText: apiMessages[apiMessages.length - 1].content,
-          messages: apiMessages,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(
-          (data as { message?: string }).message ??
-            "Balbo 的翻譯機台暫時卡帶，請稍後再試。"
-        );
-      }
-
-      const data = (await response.json()) as DataStoryResponse;
-      setResult(data);
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "發生未知錯誤，請稍後再試。"
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    submit({
+      inputText: clarificationReply.trim(),
+      messages: updatedMessages,
+    });
   }
 
   return (
@@ -362,24 +348,24 @@ export default function DataStoryPanel({
                 枯燥數據白話文翻譯所
               </h1>
               <p className="mt-1 text-sm text-[#f6ead4]/60">
-                {result && !result.needsClarification
+                {displayResult && !displayResult.needsClarification
                   ? "三個平行宇宙的白話文版本"
                   : "輸入資料，Balbo 幫你說人話"}
               </p>
             </div>
           </div>
 
-          {isLoading ? <DataStoryLoadingState /> : null}
-          {!isLoading && !result ? <DataStoryEmptyState /> : null}
+          {isLoading && !displayResult ? <DataStoryLoadingState /> : null}
+          {!isLoading && !displayResult ? <DataStoryEmptyState /> : null}
 
-          {!isLoading && result?.needsClarification ? (
+          {!isLoading && displayResult?.needsClarification ? (
             <div className="flex flex-col items-center justify-center pt-8">
               <div className="w-full max-w-md rounded-lg border border-[#ffb86b]/40 bg-[#2e1f10]/80 p-5 shadow-lg">
                 <p className="mb-4 text-sm font-semibold text-[#ffb86b]">
                   Balbo 正在吧檯後方看著你...
                 </p>
                 <p className="mb-6 text-base leading-7 text-[#f6ead4]">
-                  「{result.clarificationQuestion}」
+                  「{displayResult.clarificationQuestion}」
                 </p>
                 <textarea
                   className="mb-4 min-h-24 w-full rounded border border-[#b98f49]/30 bg-[#151b2b] px-3 py-2 text-sm text-[#f6ead4] placeholder-[#f6ead4]/40 outline-none focus:border-[#d6a85d]"
@@ -399,13 +385,13 @@ export default function DataStoryPanel({
             </div>
           ) : null}
 
-          {!isLoading && result && !result.needsClarification ? (
+          {displayResult && !displayResult.needsClarification ? (
             <div className="space-y-6 pt-5">
               {/* Balbo opening */}
               <div className="rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/40 p-4">
                 <p className="text-sm font-semibold text-[#7ee7da]">Balbo 的招呼：</p>
                 <p className="mt-1.5 leading-7 text-[#f6ead4]/85">
-                  {result.balboOpening}
+                  <StreamingText text={displayResult.balboOpening} isLoading={isLoading} />
                 </p>
               </div>
 
@@ -413,11 +399,15 @@ export default function DataStoryPanel({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-lg border border-[#263958] bg-[#171b26] p-4">
                   <p className="mb-2 text-xs font-semibold text-[#f6ead4]/50">原始死板數據</p>
-                  <p className="text-sm leading-6 text-[#f6ead4]/70">{result.boringReality}</p>
+                  <p className="text-sm leading-6 text-[#f6ead4]/70">
+                    <StreamingText text={displayResult.boringReality} isLoading={isLoading} />
+                  </p>
                 </div>
                 <div className="rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4">
-                  <p className="mb-2 text-xs font-semibold text-[#d6a85d]">大叔的溫暖總結</p>
-                  <p className="text-sm leading-6 text-[#f6ead4]/90">{result.balboTranslation}</p>
+                  <p className="mb-2 text-xs font-semibold text-[#d6a85d]">大叔的溫慢總結</p>
+                  <p className="text-sm leading-6 text-[#f6ead4]/90">
+                    <StreamingText text={displayResult.balboTranslation} isLoading={isLoading} />
+                  </p>
                 </div>
               </div>
 
@@ -447,25 +437,35 @@ export default function DataStoryPanel({
 
               {/* Active Version Content */}
               <div className="mt-4">
-                {activeTab === "investor" && result.investorVersion && (
-                  <VersionCard version={result.investorVersion} label="投資人視角" />
+                {activeTab === "investor" && (
+                  <VersionCard
+                    version={displayResult.investorVersion}
+                    label="投資人視角"
+                    isLoading={isLoading}
+                  />
                 )}
-                {activeTab === "customer" && result.customerVersion && (
-                  <VersionCard version={result.customerVersion} label="消費者視角" />
+                {activeTab === "customer" && (
+                  <VersionCard
+                    version={displayResult.customerVersion}
+                    label="消費者視角"
+                    isLoading={isLoading}
+                  />
                 )}
-                {activeTab === "grandma" && result.grandmaVersion && (
-                  <VersionCard version={result.grandmaVersion} label="長輩視角" />
+                {activeTab === "grandma" && (
+                  <VersionCard
+                    version={displayResult.grandmaVersion}
+                    label="長輩視角"
+                    isLoading={isLoading}
+                  />
                 )}
               </div>
 
               {/* Balbo closing */}
-              {result.balboClosing ? (
-                <div className="mt-6 rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4 text-center">
-                  <p className="text-sm italic leading-7 text-[#d6a85d]">
-                    {result.balboClosing}
-                  </p>
-                </div>
-              ) : null}
+              <div className="mt-6 rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4 text-center">
+                <p className="text-sm italic leading-7 text-[#d6a85d]">
+                  <StreamingText text={displayResult.balboClosing} isLoading={isLoading} />
+                </p>
+              </div>
             </div>
           ) : null}
         </div>
@@ -475,6 +475,21 @@ export default function DataStoryPanel({
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StreamingText({
+  text,
+  isLoading,
+  fallback = "正在打字...",
+}: {
+  text?: string;
+  isLoading?: boolean;
+  fallback?: string;
+}) {
+  if (!text && isLoading) {
+    return <span className="animate-pulse text-[#d6a85d]">{fallback}</span>;
+  }
+  return text ? <>{text}</> : null;
+}
 
 function AttachedFileList({
   files,
@@ -509,7 +524,15 @@ function AttachedFileList({
   );
 }
 
-function VersionCard({ version, label }: { version: DataStoryVersion; label: string }) {
+function VersionCard({
+  version,
+  label,
+  isLoading,
+}: {
+  version?: DataStoryVersion;
+  label: string;
+  isLoading?: boolean;
+}) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-300">
       <section>
@@ -518,41 +541,62 @@ function VersionCard({ version, label }: { version: DataStoryVersion; label: str
         </p>
         <div className="rounded-lg border border-[#b98f49]/30 bg-[#171b26] p-4">
           <p className="text-base italic leading-7 text-[#f6ead4]/90">
-            「{version.analogy}」
+            「<StreamingText text={version?.analogy} isLoading={isLoading} />」
           </p>
         </div>
       </section>
 
-      <TextResultBlock label="萬花筒故事文案 (PAS架構)" text={version.storyCopy} />
+      <TextResultBlock
+        label="萬花筒故事文案 (PAS架構)"
+        text={version?.storyCopy || ""}
+        isLoading={isLoading}
+      />
 
       <section>
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7ee7da]">
           吸睛金句（Slogan）
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {version.slogans?.map((slogan, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 rounded-lg border border-[#7ee7da]/30 bg-[#14343a]/30 p-4"
-            >
+          {isLoading && !version?.slogans?.length ? (
+            <div className="flex items-center gap-3 rounded-lg border border-[#7ee7da]/30 bg-[#14343a]/30 p-4">
               <Zap aria-hidden="true" className="h-4 w-4 shrink-0 text-[#7ee7da]" />
-              <p className="text-sm font-medium text-[#f6ead4]">{slogan}</p>
-              <button
-                className="ml-auto text-[#f6ead4]/40 hover:text-[#7ee7da]"
-                onClick={() => navigator.clipboard?.writeText(slogan)}
-                title="複製金句"
-              >
-                <Clipboard className="h-3.5 w-3.5" />
-              </button>
+              <p className="text-sm font-medium text-[#f6ead4]">正在產生金句...</p>
             </div>
-          ))}
+          ) : (
+            version?.slogans?.map((slogan, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 rounded-lg border border-[#7ee7da]/30 bg-[#14343a]/30 p-4"
+              >
+                <Zap aria-hidden="true" className="h-4 w-4 shrink-0 text-[#7ee7da]" />
+                <p className="text-sm font-medium text-[#f6ead4]">{slogan}</p>
+                <button
+                  className="ml-auto text-[#f6ead4]/40 hover:text-[#7ee7da]"
+                  onClick={() => navigator.clipboard?.writeText(slogan)}
+                  title="複製金句"
+                >
+                  <Clipboard className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </div>
   );
 }
 
-function TextResultBlock({ label, text, children }: { label: string; text: string; children?: React.ReactNode }) {
+function TextResultBlock({
+  label,
+  text,
+  children,
+  isLoading,
+}: {
+  label: string;
+  text: string;
+  children?: React.ReactNode;
+  isLoading?: boolean;
+}) {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
@@ -571,7 +615,7 @@ function TextResultBlock({ label, text, children }: { label: string; text: strin
       </div>
       <div className="rounded-lg border border-[#b98f49]/25 bg-[#171b26] p-4">
         <p className="whitespace-pre-wrap text-sm leading-7 text-[#f6ead4]/85">
-          {text}
+          <StreamingText text={text} isLoading={isLoading} />
         </p>
       </div>
       {children}

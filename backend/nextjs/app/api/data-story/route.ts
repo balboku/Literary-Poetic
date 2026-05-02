@@ -1,10 +1,14 @@
 import type { NextRequest } from "next/server";
+import { streamObject } from "ai";
 
-import { dataStoryRequestSchema } from "../../../lib/ai-schemas";
+import { google } from "../../../lib/ai";
+import { dataStoryRequestSchema, dataStorySchema } from "../../../lib/ai-schemas";
 import { getUserIdFromRequest } from "../../../lib/auth";
 import { consumeCredits, hasCredits } from "../../../lib/credits";
-import { generateDataStory } from "../../../lib/gemini";
-import { errorJson, json } from "../../../lib/http";
+import {
+  dataStorySystemPrompt,
+  buildDataStoryUserPrompt,
+} from "../../../lib/prompts";
 import {
   completeServiceRun,
   createServiceRun,
@@ -13,6 +17,8 @@ import {
   recordUsageLedger,
 } from "../../../lib/service-runs";
 import { sendStripeMeterEvent } from "../../../lib/stripe";
+import { json } from "../../../lib/http";
+import { optionalEnv } from "../../../lib/env";
 
 export const runtime = "nodejs";
 
@@ -42,41 +48,65 @@ export async function POST(req: NextRequest) {
       inputPayload: input,
     });
 
-    const result = await generateDataStory(input);
-    const meterEvent = await sendStripeMeterEvent({
-      userId,
-      value: Math.max(1, Math.ceil((result.usage.totalTokens ?? 1000) / 1000)),
-      identifier: runId ?? crypto.randomUUID(),
+    const modelName = optionalEnv("GEMINI_DATA_STORY_MODEL") ?? "gemini-1.5-flash";
+
+    const result = await streamObject({
+      model: google(modelName),
+      schema: dataStorySchema,
+      system: dataStorySystemPrompt,
+      prompt: buildDataStoryUserPrompt(input),
+      onFinish: async ({ object, usage }) => {
+        try {
+          const totalTokens = usage.totalTokens;
+          const creditsValue = Math.max(1, Math.ceil((totalTokens ?? 1000) / 1000));
+
+          const meterEvent = await sendStripeMeterEvent({
+            userId,
+            value: creditsValue,
+            identifier: runId ?? crypto.randomUUID(),
+          });
+
+          await completeServiceRun({
+            runId,
+            outputPayload: object,
+          });
+
+          await recordModelInvocation({
+            runId,
+            result: {
+              output: object,
+              usage,
+              modelName,
+            },
+            promptVersion: "balbo-data-story-v1-streaming",
+          });
+
+          await recordUsageLedger({
+            userId,
+            runId,
+            service: "data_story_translator",
+            quantity: creditsValue,
+            unit: "k_tokens",
+            stripeMeterEventId: meterEvent?.identifier,
+          });
+
+          await consumeCredits({ userId });
+        } catch (recordingError) {
+          console.error("[Streaming Finish Error]", recordingError);
+        }
+      },
     });
 
-    await completeServiceRun({
-      runId,
-      outputPayload: result.output,
-    });
-    await recordModelInvocation({
-      runId,
-      result,
-      promptVersion: "balbo-data-story-v1",
-    });
-    await recordUsageLedger({
-      userId,
-      runId,
-      service: "data_story_translator",
-      quantity: Math.max(1, Math.ceil((result.usage.totalTokens ?? 1000) / 1000)),
-      unit: "k_tokens",
-      stripeMeterEventId: meterEvent?.identifier,
-    });
-    await consumeCredits({ userId });
-
-    return json({
-      runId,
-      ...result.output,
-    });
+    return result.toTextStreamResponse();
   } catch (error) {
-    await failServiceRun({
-      runId,
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
-    });
-    return errorJson(error);
+    if (runId) {
+      await failServiceRun({
+        runId,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+    // For streaming, we might need a different way to return error if the stream already started,
+    // but here we are still in the initial setup.
+    return json({ error: error instanceof Error ? error.message : "發生未知錯誤" }, 500);
   }
 }
