@@ -1,19 +1,31 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Clipboard,
+  FileText,
   Loader2,
   RefreshCw,
   ScrollText,
   Sparkles,
   Upload,
+  X,
   Zap,
 } from "lucide-react";
 import { parseFileToText } from "../lib/file-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+type AttachedFile = {
+  name: string;
+  content: string;
+};
+
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 type DataStoryVersion = {
   analogy: string;
@@ -41,13 +53,17 @@ type DataStoryPanelProps = {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MAX_CHARS = 120000;
+const DRAFT_STORAGE_KEY = "dataStoryDraft";
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DataStoryPanel({
   apiEndpoint = "/api/data-story",
 }: DataStoryPanelProps) {
+  const [isMounted, setIsMounted] = useState(false);
   const [inputText, setInputText] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [result, setResult] = useState<DataStoryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,8 +72,37 @@ export default function DataStoryPanel({
   const [activeTab, setActiveTab] = useState<"investor" | "customer" | "grandma">("investor");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const charCount = inputText.length;
+  const charCount =
+    inputText.length +
+    attachedFiles.reduce((acc, f) => acc + f.content.length, 0);
   const canSubmit = charCount >= 20 && charCount <= MAX_CHARS && !isLoading;
+
+  // ── State Persistence ──────────────────────────────────────────────────────
+
+  useEffect(() => {
+    setIsMounted(true);
+    const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.inputText !== undefined) setInputText(parsed.inputText);
+        if (parsed.attachedFiles !== undefined) setAttachedFiles(parsed.attachedFiles);
+        if (parsed.activeTab !== undefined) setActiveTab(parsed.activeTab);
+        if (parsed.messages !== undefined) setMessages(parsed.messages);
+      } catch (e) {
+        console.error("Failed to parse local storage draft:", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem(
+        DRAFT_STORAGE_KEY,
+        JSON.stringify({ inputText, attachedFiles, activeTab, messages })
+      );
+    }
+  }, [inputText, attachedFiles, activeTab, messages, isMounted]);
 
   // ── File handling ──────────────────────────────────────────────────────────
 
@@ -66,16 +111,20 @@ export default function DataStoryPanel({
     if (fileArray.length === 0) return;
 
     setError(null);
-    const parts: string[] = [];
+    const newFiles: AttachedFile[] = [];
     const errors: string[] = [];
 
     for (const file of fileArray) {
       try {
         const text = await parseFileToText(file);
-        parts.push(`\n\n--- 檔案：${file.name} ---\n\n${text}`);
+        newFiles.push({ name: file.name, content: text });
       } catch (err) {
         console.error(err);
-        errors.push(`檔案 ${file.name} 解析失敗：${err instanceof Error ? err.message : String(err)}`);
+        errors.push(
+          `檔案 ${file.name} 解析失敗：${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
       }
     }
 
@@ -83,10 +132,8 @@ export default function DataStoryPanel({
       setError(errors.join("\n"));
     }
 
-    if (parts.length > 0) {
-      setInputText((prev) =>
-        (prev + parts.join("")).slice(0, MAX_CHARS)
-      );
+    if (newFiles.length > 0) {
+      setAttachedFiles((prev) => [...prev, ...newFiles]);
     }
   }
 
@@ -104,23 +151,47 @@ export default function DataStoryPanel({
     }
   }
 
+  function removeAttachedFile(index: number) {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
-    await submitToApi(inputText);
+
+    let combinedContent = inputText;
+    if (attachedFiles.length > 0) {
+      combinedContent +=
+        "\n\n--- 附件資料 ---\n" +
+        attachedFiles
+          .map((f) => `檔案：${f.name}\n${f.content}`)
+          .join("\n\n");
+    }
+
+    const initialMessages: Message[] = [
+      { role: "user", content: combinedContent.trim() },
+    ];
+    setMessages(initialMessages);
+    await submitToApi(initialMessages);
   }
 
   async function handleClarificationSubmit() {
-    if (!clarificationReply.trim() || isLoading) return;
-    const newText = inputText + "\n\n補充細節：" + clarificationReply.trim();
-    setInputText(newText);
+    if (!clarificationReply.trim() || isLoading || !result?.clarificationQuestion) return;
+
+    const updatedMessages: Message[] = [
+      ...messages,
+      { role: "assistant", content: result.clarificationQuestion },
+      { role: "user", content: clarificationReply.trim() },
+    ];
+
+    setMessages(updatedMessages);
     setClarificationReply("");
-    await submitToApi(newText);
+    await submitToApi(updatedMessages);
   }
 
-  async function submitToApi(text: string) {
+  async function submitToApi(apiMessages: Message[]) {
     setIsLoading(true);
     setError(null);
     setResult(null);
@@ -129,14 +200,17 @@ export default function DataStoryPanel({
       const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inputText: text.trim() }),
+        body: JSON.stringify({
+          inputText: apiMessages[apiMessages.length - 1].content,
+          messages: apiMessages,
+        }),
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(
           (data as { message?: string }).message ??
-            "Balbo 的翻譯機台暫時卡帶，請稍後再試。",
+            "Balbo 的翻譯機台暫時卡帶，請稍後再試。"
         );
       }
 
@@ -146,7 +220,7 @@ export default function DataStoryPanel({
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "發生未知錯誤，請稍後再試。",
+          : "發生未知錯誤，請稍後再試。"
       );
     } finally {
       setIsLoading(false);
@@ -185,7 +259,7 @@ export default function DataStoryPanel({
                 className="mb-2 block text-sm font-medium text-[#f6ead4]"
                 htmlFor="data-story-input"
               >
-                原始資料或文件內容
+                指令與補充說明
               </label>
               <div
                 className={[
@@ -202,10 +276,10 @@ export default function DataStoryPanel({
                 <textarea
                   id="data-story-input"
                   className="min-h-52 w-full resize-y rounded-lg bg-[#0f1627] px-4 py-3 text-sm leading-7 text-[#f6ead4] outline-none transition focus:ring-2 focus:ring-[#7ee7da]/35"
-                  placeholder="貼上規格書、論文摘要、財報數字或產品描述…也可以直接拖曳文件進來（支援 TXT, MD, CSV, PDF, DOCX, XLSX）。"
+                  placeholder="請在此輸入你的指令或補充說明...（也可以直接拖曳文件進來）"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  maxLength={MAX_CHARS}
+                  maxLength={Math.max(0, MAX_CHARS - (charCount - inputText.length))}
                 />
                 {isDragging && (
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg border-2 border-dashed border-[#7ee7da] bg-[#14343a]/60">
@@ -215,6 +289,12 @@ export default function DataStoryPanel({
                   </div>
                 )}
               </div>
+
+              <AttachedFileList
+                files={attachedFiles}
+                onRemove={removeAttachedFile}
+              />
+
               <div className="mt-1.5 flex items-center justify-between">
                 <button
                   className="flex cursor-pointer items-center gap-1.5 text-xs text-[#f6ead4]/55 transition hover:text-[#d6a85d] focus:outline-none"
@@ -396,6 +476,39 @@ export default function DataStoryPanel({
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+function AttachedFileList({
+  files,
+  onRemove,
+}: {
+  files: AttachedFile[];
+  onRemove: (index: number) => void;
+}) {
+  if (files.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {files.map((file, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-1.5 rounded-full border border-[#7ee7da]/30 bg-[#14343a]/60 px-3 py-1 text-xs text-[#7ee7da]"
+        >
+          <FileText aria-hidden="true" className="h-3.5 w-3.5" />
+          <span className="max-w-[150px] truncate" title={file.name}>
+            {file.name}
+          </span>
+          <button
+            type="button"
+            className="ml-1 rounded-full p-0.5 text-[#7ee7da]/70 transition hover:bg-[#7ee7da]/20 hover:text-[#ff8f8f] focus:outline-none"
+            onClick={() => onRemove(i)}
+            title="移除檔案"
+          >
+            <X aria-hidden="true" className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function VersionCard({ version, label }: { version: DataStoryVersion; label: string }) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-300">
@@ -502,3 +615,4 @@ function DataStoryLoadingState() {
     </div>
   );
 }
+
