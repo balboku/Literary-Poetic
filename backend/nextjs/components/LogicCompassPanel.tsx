@@ -156,14 +156,36 @@ export default function LogicCompassPanel({
       {/* Print-only styles */}
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          #logic-compass-print-region { display: block !important; }
-          #logic-compass-print-region { color: #000 !important; background: #fff !important; }
+          /* Hide interactive UI elements */
+          #left-panel, #right-header {
+            display: none !important;
+          }
+          /* Change grid layout to block for printing */
+          #main-grid {
+            display: block !important;
+          }
+          /* Reset background colors and force text to black */
+          body, section, #main-grid, #right-panel, #logic-compass-print-region, div {
+            background-color: white !important;
+            background-image: none !important;
+            border-color: #ddd !important;
+            box-shadow: none !important;
+          }
+          /* Force all text and icons to black for readability on white paper */
+          p, span, h1, h2, h3, h4, h5, h6, svg, button {
+            color: black !important;
+          }
+          /* Specific adjustments for print region */
+          #logic-compass-print-region {
+            display: block !important;
+            padding: 20px 0 !important;
+          }
         }
       `}</style>
 
       <section className="min-h-dvh bg-[#0f1627] px-4 py-6 text-[#f6ead4] sm:px-6 lg:px-8">
         <div
+          id="main-grid"
           className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(340px,440px)_1fr]"
           style={{
             backgroundImage:
@@ -172,7 +194,7 @@ export default function LogicCompassPanel({
           }}
         >
           {/* ── Left: Input panel ─────────────────────────────────────────── */}
-          <div className="rounded-lg border border-[#b98f49]/35 bg-[#151b2b]/95 p-5 shadow-2xl shadow-black/30">
+          <div id="left-panel" className="rounded-lg border border-[#b98f49]/35 bg-[#151b2b]/95 p-5 shadow-2xl shadow-black/30">
             {/* Balbo header */}
             <div className="mb-5 flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#d6a85d]/50 bg-[#1a1e2e] text-[#7ee7da]">
@@ -323,8 +345,8 @@ export default function LogicCompassPanel({
           </div>
 
           {/* ── Right: Results panel ───────────────────────────────────────── */}
-          <div className="min-h-[640px] rounded-lg border border-[#263958] bg-[#101827]/95 p-4 shadow-2xl shadow-black/25 sm:p-5">
-            <div className="flex flex-col gap-3 border-b border-[#263958] pb-4 md:flex-row md:items-center md:justify-between">
+          <div id="right-panel" className="min-h-[640px] rounded-lg border border-[#263958] bg-[#101827]/95 p-4 shadow-2xl shadow-black/25 sm:p-5">
+            <div id="right-header" className="flex flex-col gap-3 border-b border-[#263958] pb-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-2xl font-semibold text-[#f6ead4]">
                   邏輯羅盤 · 企劃案壓力測試

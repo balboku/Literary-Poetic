@@ -68,15 +68,21 @@ export async function POST(req: NextRequest) {
 
           await completeServiceRun({
             runId,
-            outputPayload: object,
+            outputPayload: object as any,
           });
 
           await recordModelInvocation({
             runId,
             result: {
-              output: object,
-              usage,
+              output: object as any,
+              usage: {
+                inputTokens: (usage as any).promptTokens ?? 0,
+                outputTokens: (usage as any).completionTokens ?? 0,
+                totalTokens: usage.totalTokens,
+              },
               modelName,
+              latencyMs: 0,
+              rawResponse: {},
             },
             promptVersion: "balbo-data-story-v1-streaming",
           });
