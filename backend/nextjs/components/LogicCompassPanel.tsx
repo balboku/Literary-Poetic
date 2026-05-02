@@ -15,6 +15,7 @@ import {
   Sparkles,
   Target,
 } from "lucide-react";
+import { parseFileToText } from "../lib/file-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -63,16 +64,40 @@ export default function LogicCompassPanel({
 
   // ── File handling ──────────────────────────────────────────────────────────
 
-  async function handleFileRead(file: File) {
-    const text = await file.text();
-    setBusinessModel(text.slice(0, MAX_CHARS));
+  async function handleFilesRead(files: FileList | File[]) {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    setError(null);
+    const parts: string[] = [];
+    const errors: string[] = [];
+
+    for (const file of fileArray) {
+      try {
+        const text = await parseFileToText(file);
+        parts.push(`\n\n--- 檔案：${file.name} ---\n\n${text}`);
+      } catch (err) {
+        console.error(err);
+        errors.push(`檔案 ${file.name} 解析失敗：${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      setError(errors.join("\n"));
+    }
+
+    if (parts.length > 0) {
+      setBusinessModel((prev) =>
+        (prev + parts.join("")).slice(0, MAX_CHARS)
+      );
+    }
   }
 
   function handleFileDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDragging(false);
-    const file = event.dataTransfer.files[0];
-    if (file) handleFileRead(file);
+    const { files } = event.dataTransfer;
+    if (files.length > 0) handleFilesRead(files);
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
@@ -179,7 +204,7 @@ export default function LogicCompassPanel({
                   <textarea
                     id="logic-business-model"
                     className="min-h-60 w-full resize-y rounded-lg bg-[#0f1627] px-4 py-3 text-sm leading-7 text-[#f6ead4] outline-none transition focus:ring-2 focus:ring-[#7ee7da]/35"
-                    placeholder="描述你的商業模式、目標客群、收入來源、市場規模、競爭優勢…也可以拖曳 TXT 進來。"
+                    placeholder="描述你的商業模式、目標客群、收入來源、市場規模、競爭優勢…也可以拖曳文件進來（支援 TXT, MD, CSV, PDF, DOCX, XLSX）。"
                     value={businessModel}
                     onChange={(e) => setBusinessModel(e.target.value)}
                     maxLength={MAX_CHARS}
@@ -198,7 +223,7 @@ export default function LogicCompassPanel({
                     onClick={() => fileInputRef.current?.click()}
                     type="button"
                   >
-                    上傳 TXT 企劃書
+                    上傳檔案（可多選）
                   </button>
                   <p
                     className={[
@@ -214,13 +239,17 @@ export default function LogicCompassPanel({
                 </div>
                 <input
                   ref={fileInputRef}
-                  accept=".txt,.md"
+                  accept=".txt,.md,.csv,.pdf,.docx,.xlsx"
                   className="sr-only"
                   id="logic-file"
+                  multiple
                   type="file"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileRead(file);
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleFilesRead(e.target.files);
+                      // 重設 input 以便下次能選同一批檔案
+                      e.target.value = "";
+                    }
                   }}
                 />
               </div>

@@ -14,6 +14,7 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
+import { parseFileToText } from "../lib/file-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -74,25 +75,48 @@ export default function DataStoryPanel({
 
   // ── File handling ──────────────────────────────────────────────────────────
 
-  async function handleFileRead(file: File) {
-    if (file.type === "application/pdf") {
-      setError("PDF 解析功能正在接線中，請先貼上文字內容。");
-      return;
+  async function handleFilesRead(files: FileList | File[]) {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    setError(null);
+    const parts: string[] = [];
+    const errors: string[] = [];
+
+    for (const file of fileArray) {
+      try {
+        const text = await parseFileToText(file);
+        parts.push(`\n\n--- 檔案：${file.name} ---\n\n${text}`);
+      } catch (err) {
+        console.error(err);
+        errors.push(`檔案 ${file.name} 解析失敗：${err instanceof Error ? err.message : String(err)}`);
+      }
     }
-    const text = await file.text();
-    setInputText(text.slice(0, MAX_CHARS));
+
+    if (errors.length > 0) {
+      setError(errors.join("\n"));
+    }
+
+    if (parts.length > 0) {
+      setInputText((prev) =>
+        (prev + parts.join("")).slice(0, MAX_CHARS)
+      );
+    }
   }
 
   function handleFileDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDragging(false);
-    const file = event.dataTransfer.files[0];
-    if (file) handleFileRead(file);
+    const { files } = event.dataTransfer;
+    if (files.length > 0) handleFilesRead(files);
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (file) handleFileRead(file);
+    if (event.target.files && event.target.files.length > 0) {
+      handleFilesRead(event.target.files);
+      // 重設 input 以便下次能選同一批檔案
+      event.target.value = "";
+    }
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
@@ -183,7 +207,7 @@ export default function DataStoryPanel({
                 <textarea
                   id="data-story-input"
                   className="min-h-52 w-full resize-y rounded-lg bg-[#0f1627] px-4 py-3 text-sm leading-7 text-[#f6ead4] outline-none transition focus:ring-2 focus:ring-[#7ee7da]/35"
-                  placeholder="貼上規格書、論文摘要、財報數字或產品描述…也可以直接拖曳 TXT 檔進來。"
+                  placeholder="貼上規格書、論文摘要、財報數字或產品描述…也可以直接拖曳文件進來（支援 TXT, MD, CSV, PDF, DOCX, XLSX）。"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   maxLength={MAX_CHARS}
@@ -203,7 +227,7 @@ export default function DataStoryPanel({
                   type="button"
                 >
                   <Upload aria-hidden="true" className="h-3.5 w-3.5" />
-                  上傳 TXT 檔
+                  上傳檔案（可多選）
                 </button>
                 <p
                   className={[
@@ -218,9 +242,10 @@ export default function DataStoryPanel({
               </div>
               <input
                 ref={fileInputRef}
-                accept=".txt,.md,.csv"
+                accept=".txt,.md,.csv,.pdf,.docx,.xlsx"
                 className="sr-only"
                 id="data-story-file"
+                multiple
                 type="file"
                 onChange={handleFileChange}
               />

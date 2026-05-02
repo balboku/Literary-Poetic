@@ -121,7 +121,7 @@ export function generateLogicCompassReport(
 ): Promise<GeminiResult<LogicCompassOutput>> {
   return generateStructured({
     modelName:
-      optionalEnv("GEMINI_LOGIC_COMPASS_MODEL") ?? "gemini-3.1-pro-preview",
+      optionalEnv("GEMINI_LOGIC_COMPASS_MODEL") ?? "gemini-3-flash-preview",
     systemInstruction: logicCompassSystemPrompt,
     userPrompt: buildLogicCompassUserPrompt(input),
     schema: logicCompassSchema,
