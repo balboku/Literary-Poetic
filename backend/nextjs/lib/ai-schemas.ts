@@ -13,6 +13,7 @@ export const crossDomainFactSchema = z.object({
   title: z.string(),
   domain: z.string(),
   unexpectedLink: z.string(),
+  firstSentenceHook: z.string(),
   contentAngle: z.string(),
   balboAside: z.string(),
 });
@@ -22,6 +23,7 @@ export const storySeedSchema = z.object({
   hook: z.string(),
   outline: z.array(z.string()).min(3).max(3),
   format: z.string(),
+  visualCue: z.string(),
   riskAndFix: z.string(),
 });
 
@@ -41,6 +43,8 @@ export const dataStoryRequestSchema = z.object({
 
 export const dataStorySchema = z.object({
   balboOpening: z.string(),
+  boringReality: z.string(),
+  balboTranslation: z.string(),
   analogy: z.string(), // 【大叔的白話文翻譯】
   storyCopy: z.string(), // 【萬花筒故事文案】
   slogans: z.array(z.string()).min(1).max(2), // 【吸睛金句】
@@ -53,11 +57,17 @@ export const logicCompassRequestSchema = z.object({
   businessModel: z.string().min(20).max(120000),
 });
 
+export const sharpQuestionSchema = z.object({
+  question: z.string(),
+  balboHint: z.string(),
+});
+
 export const logicCompassSchema = z.object({
   balboOpening: z.string(), // 高度肯定
   logicalContradictions: z.array(z.string()).min(1), // 【羅盤指針偏移】
   marketOptimismRisks: z.array(z.string()).min(1), // 【迷霧警報】
-  sharpQuestions: z.array(z.string()).min(3).max(3), // 【大叔的靈魂拷問】
+  sharpQuestions: z.array(sharpQuestionSchema).min(3).max(3), // 【大叔的靈魂拷問】
+  pivotSuggestion: z.string(), // 救生圈：軸心轉向建議
   balboClosing: z.string(), // 回覆結語
 });
 
