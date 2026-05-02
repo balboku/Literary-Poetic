@@ -3,11 +3,8 @@
 import { FormEvent, useRef, useState } from "react";
 import {
   AlertTriangle,
-  BookOpen,
   Clipboard,
-  FileText,
   Loader2,
-  Newspaper,
   RefreshCw,
   ScrollText,
   Sparkles,
@@ -18,42 +15,30 @@ import { parseFileToText } from "../lib/file-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type StyleOption = {
-  value: "warm" | "humorous" | "fantasy" | "fundraising" | "pr" | "concise";
-  label: string;
-  desc: string;
-};
-
-type PitchSlide = {
-  title: string;
-  bullets: string[];
+type DataStoryVersion = {
+  analogy: string;
+  storyCopy: string;
+  slogans: string[];
 };
 
 type DataStoryResponse = {
   runId?: string;
-  balboOpening: string;
-  analogy: string;
-  storyCopy: string;
-  slogans: string[];
-  balboClosing: string;
+  needsClarification?: boolean;
+  clarificationQuestion?: string;
+  balboOpening?: string;
+  boringReality?: string;
+  balboTranslation?: string;
+  investorVersion?: DataStoryVersion;
+  customerVersion?: DataStoryVersion;
+  grandmaVersion?: DataStoryVersion;
+  balboClosing?: string;
 };
-
-// No activeView needed as we show all sections in a flow
 
 type DataStoryPanelProps = {
   apiEndpoint?: string;
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const styleOptions: StyleOption[] = [
-  { value: "fundraising", label: "募資簡報", desc: "說服投資人的語氣" },
-  { value: "warm", label: "溫暖親切", desc: "有溫度的敘事風格" },
-  { value: "humorous", label: "幽默詼諧", desc: "讓人忍不住笑的切入" },
-  { value: "fantasy", label: "奇幻魔法", desc: "充滿想像力的奇幻敘事" },
-  { value: "pr", label: "公關新聞", desc: "正式媒體稿件格式" },
-  { value: "concise", label: "精簡扼要", desc: "去除廢話的白話版本" },
-];
 
 const MAX_CHARS = 120000;
 
@@ -63,11 +48,12 @@ export default function DataStoryPanel({
   apiEndpoint = "/api/data-story",
 }: DataStoryPanelProps) {
   const [inputText, setInputText] = useState("");
-  const [style, setStyle] = useState<StyleOption["value"]>("fundraising");
   const [result, setResult] = useState<DataStoryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [clarificationReply, setClarificationReply] = useState("");
+  const [activeTab, setActiveTab] = useState<"investor" | "customer" | "grandma">("investor");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const charCount = inputText.length;
@@ -114,7 +100,6 @@ export default function DataStoryPanel({
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     if (event.target.files && event.target.files.length > 0) {
       handleFilesRead(event.target.files);
-      // 重設 input 以便下次能選同一批檔案
       event.target.value = "";
     }
   }
@@ -124,15 +109,27 @@ export default function DataStoryPanel({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
+    await submitToApi(inputText);
+  }
 
+  async function handleClarificationSubmit() {
+    if (!clarificationReply.trim() || isLoading) return;
+    const newText = inputText + "\n\n補充細節：" + clarificationReply.trim();
+    setInputText(newText);
+    setClarificationReply("");
+    await submitToApi(newText);
+  }
+
+  async function submitToApi(text: string) {
     setIsLoading(true);
     setError(null);
+    setResult(null);
 
     try {
       const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inputText: inputText.trim(), style }),
+        body: JSON.stringify({ inputText: text.trim() }),
       });
 
       if (!response.ok) {
@@ -168,7 +165,6 @@ export default function DataStoryPanel({
       >
         {/* ── Left: Input panel ─────────────────────────────────────────── */}
         <div className="rounded-lg border border-[#b98f49]/35 bg-[#151b2b]/95 p-5 shadow-2xl shadow-black/30">
-          {/* Balbo header */}
           <div className="mb-5 flex items-start gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#d6a85d]/50 bg-[#1e2514] text-[#7ee7da]">
               <ScrollText aria-hidden="true" className="h-6 w-6" />
@@ -184,7 +180,6 @@ export default function DataStoryPanel({
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
-            {/* Drop zone / textarea */}
             <div>
               <label
                 className="mb-2 block text-sm font-medium text-[#f6ead4]"
@@ -251,42 +246,6 @@ export default function DataStoryPanel({
               />
             </div>
 
-            {/* Style selector */}
-            <fieldset>
-              <legend className="mb-2 text-sm font-medium text-[#f6ead4]">
-                輸出語氣
-              </legend>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {styleOptions.map((opt) => (
-                  <label
-                    key={opt.value}
-                    className={[
-                      "flex cursor-pointer flex-col rounded-lg border p-2.5 transition",
-                      style === opt.value
-                        ? "border-[#7ee7da] bg-[#14343a]"
-                        : "border-[#b98f49]/30 bg-[#201c20] hover:border-[#d6a85d]",
-                    ].join(" ")}
-                  >
-                    <input
-                      checked={style === opt.value}
-                      className="sr-only"
-                      name="data-story-style"
-                      onChange={() => setStyle(opt.value)}
-                      type="radio"
-                      value={opt.value}
-                    />
-                    <span className="text-sm font-medium text-[#f6ead4]">
-                      {opt.label}
-                    </span>
-                    <span className="mt-0.5 text-xs text-[#f6ead4]/55">
-                      {opt.desc}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            {/* Error */}
             {error ? (
               <div
                 className="flex gap-2 rounded-lg border border-[#ffb86b]/45 bg-[#3b2117] p-3 text-sm leading-6 text-[#ffd6a3]"
@@ -300,7 +259,6 @@ export default function DataStoryPanel({
               </div>
             ) : null}
 
-            {/* Submit */}
             <button
               className="flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#d6a85d] px-4 text-base font-semibold text-[#111827] transition hover:bg-[#e5bd76] focus:outline-none focus:ring-2 focus:ring-[#7ee7da] focus:ring-offset-2 focus:ring-offset-[#151b2b] disabled:cursor-not-allowed disabled:opacity-55"
               disabled={!canSubmit}
@@ -324,17 +282,111 @@ export default function DataStoryPanel({
                 枯燥數據白話文翻譯所
               </h1>
               <p className="mt-1 text-sm text-[#f6ead4]/60">
-                {result
-                  ? `語氣：${styleOptions.find((s) => s.value === style)?.label}`
+                {result && !result.needsClarification
+                  ? "三個平行宇宙的白話文版本"
                   : "輸入資料，Balbo 幫你說人話"}
               </p>
             </div>
           </div>
 
-          {!isLoading && result ? (
-            <DataStoryResult
-              result={result}
-            />
+          {isLoading ? <DataStoryLoadingState /> : null}
+          {!isLoading && !result ? <DataStoryEmptyState /> : null}
+
+          {!isLoading && result?.needsClarification ? (
+            <div className="flex flex-col items-center justify-center pt-8">
+              <div className="w-full max-w-md rounded-lg border border-[#ffb86b]/40 bg-[#2e1f10]/80 p-5 shadow-lg">
+                <p className="mb-4 text-sm font-semibold text-[#ffb86b]">
+                  Balbo 正在吧檯後方看著你...
+                </p>
+                <p className="mb-6 text-base leading-7 text-[#f6ead4]">
+                  「{result.clarificationQuestion}」
+                </p>
+                <textarea
+                  className="mb-4 min-h-24 w-full rounded border border-[#b98f49]/30 bg-[#151b2b] px-3 py-2 text-sm text-[#f6ead4] placeholder-[#f6ead4]/40 outline-none focus:border-[#d6a85d]"
+                  placeholder="告訴 Balbo 更多細節..."
+                  value={clarificationReply}
+                  onChange={(e) => setClarificationReply(e.target.value)}
+                />
+                <button
+                  className="flex w-full items-center justify-center gap-2 rounded bg-[#d6a85d] px-4 py-2 text-sm font-semibold text-[#111827] transition hover:bg-[#e5bd76] disabled:opacity-50"
+                  disabled={!clarificationReply.trim() || isLoading}
+                  onClick={handleClarificationSubmit}
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  回覆 Balbo
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {!isLoading && result && !result.needsClarification ? (
+            <div className="space-y-6 pt-5">
+              {/* Balbo opening */}
+              <div className="rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/40 p-4">
+                <p className="text-sm font-semibold text-[#7ee7da]">Balbo 的招呼：</p>
+                <p className="mt-1.5 leading-7 text-[#f6ead4]/85">
+                  {result.balboOpening}
+                </p>
+              </div>
+
+              {/* Boring Reality vs Balbo Translation */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-lg border border-[#263958] bg-[#171b26] p-4">
+                  <p className="mb-2 text-xs font-semibold text-[#f6ead4]/50">原始死板數據</p>
+                  <p className="text-sm leading-6 text-[#f6ead4]/70">{result.boringReality}</p>
+                </div>
+                <div className="rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4">
+                  <p className="mb-2 text-xs font-semibold text-[#d6a85d]">大叔的溫暖總結</p>
+                  <p className="text-sm leading-6 text-[#f6ead4]/90">{result.balboTranslation}</p>
+                </div>
+              </div>
+
+              {/* Tabs for 3 Versions */}
+              <div className="mt-8 rounded-lg border border-[#263958] bg-[#151b2b] p-1">
+                <div className="flex">
+                  <button
+                    className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${activeTab === "investor" ? "bg-[#d6a85d] text-[#111827]" : "text-[#f6ead4]/60 hover:text-[#f6ead4]"}`}
+                    onClick={() => setActiveTab("investor")}
+                  >
+                    給投資人
+                  </button>
+                  <button
+                    className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${activeTab === "customer" ? "bg-[#d6a85d] text-[#111827]" : "text-[#f6ead4]/60 hover:text-[#f6ead4]"}`}
+                    onClick={() => setActiveTab("customer")}
+                  >
+                    給消費者
+                  </button>
+                  <button
+                    className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${activeTab === "grandma" ? "bg-[#d6a85d] text-[#111827]" : "text-[#f6ead4]/60 hover:text-[#f6ead4]"}`}
+                    onClick={() => setActiveTab("grandma")}
+                  >
+                    給長輩
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Version Content */}
+              <div className="mt-4">
+                {activeTab === "investor" && result.investorVersion && (
+                  <VersionCard version={result.investorVersion} label="投資人視角" />
+                )}
+                {activeTab === "customer" && result.customerVersion && (
+                  <VersionCard version={result.customerVersion} label="消費者視角" />
+                )}
+                {activeTab === "grandma" && result.grandmaVersion && (
+                  <VersionCard version={result.grandmaVersion} label="長輩視角" />
+                )}
+              </div>
+
+              {/* Balbo closing */}
+              {result.balboClosing ? (
+                <div className="mt-6 rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4 text-center">
+                  <p className="text-sm italic leading-7 text-[#d6a85d]">
+                    {result.balboClosing}
+                  </p>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
@@ -342,46 +394,30 @@ export default function DataStoryPanel({
   );
 }
 
-// ─── Result ───────────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-function DataStoryResult({
-  result,
-}: {
-  result: DataStoryResponse;
-}) {
+function VersionCard({ version, label }: { version: DataStoryVersion; label: string }) {
   return (
-    <div className="space-y-6 pt-5">
-      {/* Balbo opening */}
-      <div className="rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/40 p-4">
-        <p className="text-sm font-semibold text-[#7ee7da]">Balbo 的招呼：</p>
-        <p className="mt-1.5 leading-7 text-[#f6ead4]/85">{result.balboOpening}</p>
-      </div>
-
-      {/* 1. Analogy */}
+    <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-300">
       <section>
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
-          1. 大叔的白話文翻譯（核心價值比喻）
+          {label}的比喻
         </p>
         <div className="rounded-lg border border-[#b98f49]/30 bg-[#171b26] p-4">
           <p className="text-base italic leading-7 text-[#f6ead4]/90">
-            「{result.analogy}」
+            「{version.analogy}」
           </p>
         </div>
       </section>
 
-      {/* 2. Story Copy */}
-      <TextResultBlock
-        label="2. 萬花筒故事文案"
-        text={result.storyCopy}
-      />
+      <TextResultBlock label="萬花筒故事文案 (PAS架構)" text={version.storyCopy} />
 
-      {/* 3. Slogans */}
       <section>
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7ee7da]">
-          3. 吸睛金句（Slogan）
+          吸睛金句（Slogan）
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {result.slogans.map((slogan, i) => (
+          {version.slogans?.map((slogan, i) => (
             <div
               key={i}
               className="flex items-center gap-3 rounded-lg border border-[#7ee7da]/30 bg-[#14343a]/30 p-4"
@@ -399,30 +435,11 @@ function DataStoryResult({
           ))}
         </div>
       </section>
-
-      {/* Balbo closing */}
-      {result.balboClosing ? (
-        <div className="rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4 text-center">
-          <p className="text-sm italic leading-7 text-[#d6a85d]">
-            {result.balboClosing}
-          </p>
-        </div>
-      ) : null}
     </div>
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function TextResultBlock({
-  label,
-  text,
-  children,
-}: {
-  label: string;
-  text: string;
-  children?: React.ReactNode;
-}) {
+function TextResultBlock({ label, text, children }: { label: string; text: string; children?: React.ReactNode }) {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
@@ -473,7 +490,7 @@ function DataStoryLoadingState() {
       <div className="w-full max-w-lg space-y-3">
         <div className="flex items-center justify-center gap-3 text-[#7ee7da]">
           <RefreshCw aria-hidden="true" className="h-5 w-5 animate-spin" />
-          <span className="text-sm font-medium">Balbo 正在用故事包裹數字</span>
+          <span className="text-sm font-medium">Balbo 正在轉動萬花筒</span>
         </div>
         {[0, 1].map((item) => (
           <div

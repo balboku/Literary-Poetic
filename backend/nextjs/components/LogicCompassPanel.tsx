@@ -3,7 +3,6 @@
 import { FormEvent, useRef, useState } from "react";
 import {
   AlertTriangle,
-  CheckCircle,
   ChevronDown,
   ChevronUp,
   Clipboard,
@@ -14,28 +13,23 @@ import {
   ShieldAlert,
   Sparkles,
   Target,
+  Skull,
 } from "lucide-react";
 import { parseFileToText } from "../lib/file-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Severity = "low" | "medium" | "high" | "critical";
-
-type Vulnerability = {
-  severity: Severity;
-  issue: string;
-  whyItMatters: string;
-  sharpQuestion: string;
-  fix: string;
-};
-
 type LogicCompassResponse = {
   runId?: string;
-  balboOpening: string;
-  logicalContradictions: string[];
-  marketOptimismRisks: string[];
-  sharpQuestions: string[];
-  balboClosing: string;
+  needsClarification?: boolean;
+  clarificationQuestion?: string;
+  balboOpening?: string;
+  logicalContradictions?: string[];
+  marketOptimismRisks?: string[];
+  doomScenario?: string;
+  sharpQuestions?: { question: string; balboHint: string; }[];
+  pivotSuggestion?: string;
+  balboClosing?: string;
 };
 
 type LogicCompassPanelProps = {
@@ -52,10 +46,12 @@ export default function LogicCompassPanel({
   apiEndpoint = "/api/logic-compass",
 }: LogicCompassPanelProps) {
   const [businessModel, setBusinessModel] = useState("");
+  const [personaMask, setPersonaMask] = useState<"vc" | "hater" | "balbo">("balbo");
   const [result, setResult] = useState<LogicCompassResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [clarificationReply, setClarificationReply] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -105,15 +101,27 @@ export default function LogicCompassPanel({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
+    await submitToApi(businessModel);
+  }
 
+  async function handleClarificationSubmit() {
+    if (!clarificationReply.trim() || isLoading) return;
+    const newText = businessModel + "\n\n補充細節：" + clarificationReply.trim();
+    setBusinessModel(newText);
+    setClarificationReply("");
+    await submitToApi(newText);
+  }
+
+  async function submitToApi(text: string) {
     setIsLoading(true);
     setError(null);
+    setResult(null);
 
     try {
       const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessModel: businessModel.trim() }),
+        body: JSON.stringify({ businessModel: text.trim(), personaMask }),
       });
 
       if (!response.ok) {
@@ -247,12 +255,32 @@ export default function LogicCompassPanel({
                   onChange={(e) => {
                     if (e.target.files && e.target.files.length > 0) {
                       handleFilesRead(e.target.files);
-                      // 重設 input 以便下次能選同一批檔案
                       e.target.value = "";
                     }
                   }}
                 />
               </div>
+
+              {/* Persona Mask */}
+              <fieldset>
+                <legend className="mb-2 text-sm font-medium text-[#f6ead4]">
+                  選擇拷問面具
+                </legend>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className={`flex cursor-pointer flex-col rounded-lg border p-2 transition ${personaMask === "balbo" ? "border-[#7ee7da] bg-[#14343a]" : "border-[#b98f49]/30 bg-[#201c20] hover:border-[#d6a85d]"}`}>
+                    <input type="radio" className="sr-only" checked={personaMask === "balbo"} onChange={() => setPersonaMask("balbo")} />
+                    <span className="text-sm font-medium text-[#f6ead4] text-center">大叔原味</span>
+                  </label>
+                  <label className={`flex cursor-pointer flex-col rounded-lg border p-2 transition ${personaMask === "vc" ? "border-[#ffb86b] bg-[#3b2117]" : "border-[#b98f49]/30 bg-[#201c20] hover:border-[#d6a85d]"}`}>
+                    <input type="radio" className="sr-only" checked={personaMask === "vc"} onChange={() => setPersonaMask("vc")} />
+                    <span className="text-sm font-medium text-[#f6ead4] text-center">創投 VC</span>
+                  </label>
+                  <label className={`flex cursor-pointer flex-col rounded-lg border p-2 transition ${personaMask === "hater" ? "border-[#ff8f8f] bg-[#2b1c1c]" : "border-[#b98f49]/30 bg-[#201c20] hover:border-[#d6a85d]"}`}>
+                    <input type="radio" className="sr-only" checked={personaMask === "hater"} onChange={() => setPersonaMask("hater")} />
+                    <span className="text-sm font-medium text-[#f6ead4] text-center">無情酸民</span>
+                  </label>
+                </div>
+              </fieldset>
 
               {/* Warning */}
               <div className="rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/30 p-3">
@@ -305,7 +333,7 @@ export default function LogicCompassPanel({
                   Red Team · Balbo 友善大叔壓力測試版
                 </p>
               </div>
-              {result ? (
+              {result && !result.needsClarification ? (
                 <button
                   className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#b98f49]/35 bg-[#151b2b] px-4 py-2.5 text-sm font-medium text-[#d6a85d] transition hover:border-[#d6a85d] hover:text-[#e5bd76] focus:outline-none focus:ring-2 focus:ring-[#7ee7da]/40"
                   onClick={handleExportPdf}
@@ -319,7 +347,35 @@ export default function LogicCompassPanel({
 
             {isLoading ? <LogicCompassLoadingState /> : null}
             {!isLoading && !result ? <LogicCompassEmptyState /> : null}
-            {!isLoading && result ? (
+
+            {!isLoading && result?.needsClarification ? (
+              <div className="flex flex-col items-center justify-center pt-8">
+                <div className="w-full max-w-md rounded-lg border border-[#ffb86b]/40 bg-[#2e1f10]/80 p-5 shadow-lg">
+                  <p className="mb-4 text-sm font-semibold text-[#ffb86b]">
+                    Balbo 正在吧檯後方看著你...
+                  </p>
+                  <p className="mb-6 text-base leading-7 text-[#f6ead4]">
+                    「{result.clarificationQuestion}」
+                  </p>
+                  <textarea
+                    className="mb-4 min-h-24 w-full rounded border border-[#b98f49]/30 bg-[#151b2b] px-3 py-2 text-sm text-[#f6ead4] placeholder-[#f6ead4]/40 outline-none focus:border-[#d6a85d]"
+                    placeholder="告訴 Balbo 更多細節..."
+                    value={clarificationReply}
+                    onChange={(e) => setClarificationReply(e.target.value)}
+                  />
+                  <button
+                    className="flex w-full items-center justify-center gap-2 rounded bg-[#d6a85d] px-4 py-2 text-sm font-semibold text-[#111827] transition hover:bg-[#e5bd76] disabled:opacity-50"
+                    disabled={!clarificationReply.trim() || isLoading}
+                    onClick={handleClarificationSubmit}
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    回覆 Balbo
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {!isLoading && result && !result.needsClarification ? (
               <div id="logic-compass-print-region" ref={reportRef}>
                 <LogicCompassResult result={result} />
               </div>
@@ -350,7 +406,7 @@ function LogicCompassResult({ result }: { result: LogicCompassResponse }) {
           1. 羅盤指針偏移：邏輯與常理的矛盾
         </p>
         <div className="space-y-2">
-          {result.logicalContradictions.map((item, i) => (
+          {result.logicalContradictions?.map((item, i) => (
             <div
               key={i}
               className="flex gap-3 rounded-lg border border-[#ffb86b]/25 bg-[#2e1f10]/40 p-3"
@@ -371,7 +427,7 @@ function LogicCompassResult({ result }: { result: LogicCompassResponse }) {
           2. 迷霧警報：數據與市場的過度樂觀
         </p>
         <div className="space-y-2">
-          {result.marketOptimismRisks.map((item, i) => (
+          {result.marketOptimismRisks?.map((item, i) => (
             <div
               key={i}
               className="flex gap-3 rounded-lg border border-[#ff8f8f]/25 bg-[#2b1c1c]/40 p-3"
@@ -386,45 +442,80 @@ function LogicCompassResult({ result }: { result: LogicCompassResponse }) {
         </div>
       </section>
 
+      {/* Doom Scenario (Pre-mortem) */}
+      {result.doomScenario && (
+        <section aria-label="毀滅劇本">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#ff4f4f]">
+            毀滅劇本：六個月後的慘況
+          </p>
+          <div className="flex gap-3 rounded-lg border border-[#ff4f4f]/30 bg-[#2e1010]/50 p-4 shadow-lg shadow-[#ff4f4f]/10">
+            <Skull
+              aria-hidden="true"
+              className="mt-0.5 h-5 w-5 shrink-0 text-[#ff4f4f]"
+            />
+            <p className="text-sm leading-6 text-[#f6ead4]/90 italic">{result.doomScenario}</p>
+          </div>
+        </section>
+      )}
+
       {/* 3. Sharp Questions */}
       <section aria-label="大叔的靈魂拷問">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7ee7da]">
           3. 大叔的靈魂拷問（必考題）
         </p>
         <div className="grid gap-3">
-          {result.sharpQuestions.map((q, i) => (
+          {result.sharpQuestions?.map((q, i) => (
             <div
               key={i}
-              className="flex gap-3 rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/30 p-4"
+              className="flex flex-col gap-2 rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/30 p-4"
             >
-              <Target
-                aria-hidden="true"
-                className="mt-0.5 h-4 w-4 shrink-0 text-[#7ee7da]"
-              />
-              <p className="text-sm font-medium italic leading-6 text-[#f6ead4]">
-                「{q}」
+              <div className="flex gap-3">
+                <Target
+                  aria-hidden="true"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-[#7ee7da]"
+                />
+                <p className="text-sm font-medium italic leading-6 text-[#f6ead4]">
+                  「{q.question}」
+                </p>
+              </div>
+              <p className="ml-7 text-xs text-[#7ee7da]/70 border-l-2 border-[#7ee7da]/30 pl-2">
+                {q.balboHint}
               </p>
             </div>
           ))}
         </div>
       </section>
 
+      {/* Pivot Suggestion */}
+      {result.pivotSuggestion && (
+        <section aria-label="救生圈">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
+            救生圈：軸心轉向建議 (Pivot)
+          </p>
+          <div className="rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/40 p-4">
+            <p className="text-sm leading-7 text-[#f6ead4]/90">{result.pivotSuggestion}</p>
+          </div>
+        </section>
+      )}
+
       {/* Balbo closing */}
-      <div className="rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/40 p-4">
-        <p className="text-sm font-semibold text-[#d6a85d]">Balbo 悄悄話：</p>
-        <p className="mt-1.5 text-sm leading-7 text-[#f6ead4]/85">
-          {result.balboClosing}
-        </p>
-        <button
-          aria-label="複製 Balbo 結語"
-          className="mt-3 flex cursor-pointer items-center gap-1.5 text-xs text-[#f6ead4]/50 transition hover:text-[#d6a85d] focus:outline-none"
-          onClick={() => navigator.clipboard?.writeText(result.balboClosing)}
-          type="button"
-        >
-          <Clipboard aria-hidden="true" className="h-3.5 w-3.5" />
-          複製結語
-        </button>
-      </div>
+      {result.balboClosing && (
+        <div className="rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/40 p-4">
+          <p className="text-sm font-semibold text-[#d6a85d]">Balbo 悄悄話：</p>
+          <p className="mt-1.5 text-sm leading-7 text-[#f6ead4]/85">
+            {result.balboClosing}
+          </p>
+          <button
+            aria-label="複製 Balbo 結語"
+            className="mt-3 flex cursor-pointer items-center gap-1.5 text-xs text-[#f6ead4]/50 transition hover:text-[#d6a85d] focus:outline-none"
+            onClick={() => navigator.clipboard?.writeText(result.balboClosing || '')}
+            type="button"
+          >
+            <Clipboard aria-hidden="true" className="h-3.5 w-3.5" />
+            複製結語
+          </button>
+        </div>
+      )}
     </div>
   );
 }

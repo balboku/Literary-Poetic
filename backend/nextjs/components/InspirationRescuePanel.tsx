@@ -12,6 +12,8 @@ import {
   RefreshCw,
   Sparkles,
   WandSparkles,
+  Image as ImageIcon,
+  TrendingUp,
 } from "lucide-react";
 
 type CrossDomainFact = {
@@ -19,23 +21,29 @@ type CrossDomainFact = {
   domain: string;
   unexpectedLink: string;
   contentAngle: string;
+  trendIntegration: string;
   balboAside: string;
 };
 
 type StorySeed = {
   title: string;
   hook: string;
-  outline: [string, string, string] | string[];
+  outline: string[];
   format: string;
+  visualCue: string;
+  imagePrompt: string;
+  trendIntegration: string;
   riskAndFix: string;
 };
 
 type InspirationRescueResponse = {
   runId?: string;
-  balboOpening: string;
-  crossDomainFacts: CrossDomainFact[];
-  storySeeds: StorySeed[];
-  balboClosing: string;
+  needsClarification?: boolean;
+  clarificationQuestion?: string;
+  balboOpening?: string;
+  crossDomainFacts?: CrossDomainFact[];
+  storySeeds?: StorySeed[];
+  balboClosing?: string;
 };
 
 type FavoriteItem =
@@ -79,6 +87,7 @@ export default function InspirationRescuePanel({
   const [result, setResult] = useState<InspirationRescueResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [clarificationReply, setClarificationReply] = useState("");
 
   const selectedFormat = useMemo(
     () => contentFormats.find((item) => item.value === format)?.label,
@@ -91,16 +100,28 @@ export default function InspirationRescuePanel({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
+    await submitToApi(topic);
+  }
 
+  async function handleClarificationSubmit() {
+    if (!clarificationReply.trim() || isLoading) return;
+    const newTopic = topic + "\n\n補充細節：" + clarificationReply.trim();
+    setTopic(newTopic);
+    setClarificationReply("");
+    await submitToApi(newTopic);
+  }
+
+  async function submitToApi(currentTopic: string) {
     setIsLoading(true);
     setError(null);
+    setResult(null);
 
     try {
       const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          topic: topic.trim(),
+          topic: currentTopic.trim(),
           contentFormat: format,
           service: "inspiration_rescue",
         }),
@@ -249,49 +270,78 @@ export default function InspirationRescuePanel({
               </p>
             </div>
 
-            <div
-              aria-label="輸出方案"
-              className="grid grid-cols-2 rounded-lg border border-[#b98f49]/30 bg-[#151b2b] p-1"
-              role="tablist"
-            >
-              <button
-                aria-selected={activeTab === "facts"}
-                className={[
-                  "flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition",
-                  activeTab === "facts"
-                    ? "bg-[#d6a85d] text-[#111827]"
-                    : "text-[#f6ead4]/72 hover:text-[#f6ead4]",
-                ].join(" ")}
-                onClick={() => setActiveTab("facts")}
-                role="tab"
-                type="button"
+            {!result?.needsClarification && (
+              <div
+                aria-label="輸出方案"
+                className="grid grid-cols-2 rounded-lg border border-[#b98f49]/30 bg-[#151b2b] p-1"
+                role="tablist"
               >
-                <Bug aria-hidden="true" className="h-4 w-4" />
-                A 方案
-              </button>
-              <button
-                aria-selected={activeTab === "stories"}
-                className={[
-                  "flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition",
-                  activeTab === "stories"
-                    ? "bg-[#d6a85d] text-[#111827]"
-                    : "text-[#f6ead4]/72 hover:text-[#f6ead4]",
-                ].join(" ")}
-                onClick={() => setActiveTab("stories")}
-                role="tab"
-                type="button"
-              >
-                <WandSparkles aria-hidden="true" className="h-4 w-4" />
-                B 方案
-              </button>
-            </div>
+                <button
+                  aria-selected={activeTab === "facts"}
+                  className={[
+                    "flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition",
+                    activeTab === "facts"
+                      ? "bg-[#d6a85d] text-[#111827]"
+                      : "text-[#f6ead4]/72 hover:text-[#f6ead4]",
+                  ].join(" ")}
+                  onClick={() => setActiveTab("facts")}
+                  role="tab"
+                  type="button"
+                >
+                  <Bug aria-hidden="true" className="h-4 w-4" />
+                  A 方案
+                </button>
+                <button
+                  aria-selected={activeTab === "stories"}
+                  className={[
+                    "flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition",
+                    activeTab === "stories"
+                      ? "bg-[#d6a85d] text-[#111827]"
+                      : "text-[#f6ead4]/72 hover:text-[#f6ead4]",
+                  ].join(" ")}
+                  onClick={() => setActiveTab("stories")}
+                  role="tab"
+                  type="button"
+                >
+                  <WandSparkles aria-hidden="true" className="h-4 w-4" />
+                  B 方案
+                </button>
+              </div>
+            )}
           </div>
 
           {isLoading ? <LoadingState /> : null}
 
           {!isLoading && !result ? <EmptyState /> : null}
 
-          {!isLoading && result && activeTab === "facts" ? (
+          {!isLoading && result?.needsClarification ? (
+            <div className="flex flex-col items-center justify-center pt-8">
+              <div className="w-full max-w-md rounded-lg border border-[#ffb86b]/40 bg-[#2e1f10]/80 p-5 shadow-lg">
+                <p className="mb-4 text-sm font-semibold text-[#ffb86b]">
+                  Balbo 正在吧檯後方看著你...
+                </p>
+                <p className="mb-6 text-base leading-7 text-[#f6ead4]">
+                  「{result.clarificationQuestion}」
+                </p>
+                <textarea
+                  className="mb-4 min-h-24 w-full rounded border border-[#b98f49]/30 bg-[#151b2b] px-3 py-2 text-sm text-[#f6ead4] placeholder-[#f6ead4]/40 outline-none focus:border-[#d6a85d]"
+                  placeholder="告訴 Balbo 更多細節..."
+                  value={clarificationReply}
+                  onChange={(e) => setClarificationReply(e.target.value)}
+                />
+                <button
+                  className="flex w-full items-center justify-center gap-2 rounded bg-[#d6a85d] px-4 py-2 text-sm font-semibold text-[#111827] transition hover:bg-[#e5bd76] disabled:opacity-50"
+                  disabled={!clarificationReply.trim() || isLoading}
+                  onClick={handleClarificationSubmit}
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  回覆 Balbo
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {!isLoading && result && !result.needsClarification && activeTab === "facts" && result.crossDomainFacts ? (
             <div className="grid gap-3 pt-5 xl:grid-cols-3">
               {result.crossDomainFacts.map((fact, index) => (
                 <FactCard
@@ -315,7 +365,7 @@ export default function InspirationRescuePanel({
             </div>
           ) : null}
 
-          {!isLoading && result && activeTab === "stories" ? (
+          {!isLoading && result && !result.needsClarification && activeTab === "stories" && result.storySeeds ? (
             <div className="grid gap-3 pt-5 xl:grid-cols-3">
               {result.storySeeds.map((seed, index) => (
                 <StoryCard
@@ -339,7 +389,7 @@ export default function InspirationRescuePanel({
             </div>
           ) : null}
 
-          {!isLoading && result?.balboClosing ? (
+          {!isLoading && result?.balboClosing && !result.needsClarification ? (
             <div className="mt-6 rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4">
               <p className="text-sm font-semibold text-[#d6a85d]">Balbo 叮嚀：</p>
               <p className="mt-1.5 text-sm italic leading-7 text-[#f6ead4]/85">
@@ -382,6 +432,14 @@ function FactCard({
         <InfoBlock label="領域" value={fact.domain} />
         <InfoBlock label="意外連結" value={fact.unexpectedLink} />
         <InfoBlock label="內容切入" value={fact.contentAngle} />
+        {fact.trendIntegration && (
+          <div className="rounded-md border border-[#d6a85d]/20 bg-[#33251d]/30 p-2">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-[#d6a85d]">
+              <TrendingUp className="h-3 w-3" /> 時事雷達
+            </p>
+            <p className="mt-1 text-sm leading-6 text-[#f6ead4]/82">{fact.trendIntegration}</p>
+          </div>
+        )}
       </div>
 
       <p className="mt-auto border-t border-[#263958] pt-4 text-sm leading-6 text-[#ffdca8]">
@@ -419,7 +477,7 @@ function StoryCard({
       <InfoBlock label="核心鉤子" value={seed.hook} />
 
       <ol className="mt-4 space-y-2">
-        {seed.outline.map((item, outlineIndex) => (
+        {seed.outline?.map((item, outlineIndex) => (
           <li
             className="grid grid-cols-[24px_1fr] gap-2 text-sm leading-6 text-[#f6ead4]/82"
             key={`${item}-${outlineIndex}`}
@@ -431,6 +489,33 @@ function StoryCard({
           </li>
         ))}
       </ol>
+
+      <div className="mt-4 space-y-3">
+        {seed.trendIntegration && (
+          <div className="rounded-md border border-[#d6a85d]/20 bg-[#33251d]/30 p-2">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-[#d6a85d]">
+              <TrendingUp className="h-3 w-3" /> 時事雷達
+            </p>
+            <p className="mt-1 text-sm leading-6 text-[#f6ead4]/82">{seed.trendIntegration}</p>
+          </div>
+        )}
+        {seed.imagePrompt && (
+          <div className="rounded-md border border-[#7ee7da]/20 bg-[#14343a]/30 p-2">
+             <p className="flex items-center gap-1.5 text-xs font-semibold text-[#7ee7da]">
+               <ImageIcon className="h-3 w-3" /> 視覺化咒語
+             </p>
+             <code className="mt-1 block text-xs leading-5 text-[#f6ead4]/70">
+               {seed.imagePrompt}
+             </code>
+             <button
+               className="mt-1 text-xs text-[#7ee7da] hover:underline"
+               onClick={() => copyText(seed.imagePrompt)}
+             >
+               複製咒語
+             </button>
+          </div>
+        )}
+      </div>
 
       <div className="mt-auto space-y-3 border-t border-[#263958] pt-4">
         <InfoBlock label="形式" value={seed.format} />
@@ -525,6 +610,14 @@ function normalizeResponse(raw: unknown): InspirationRescueResponse {
     root.outputPayload ??
     root) as Record<string, unknown>;
 
+  if (output.needsClarification) {
+    return {
+      runId: (root.runId ?? root.run_id ?? output.runId) as string | undefined,
+      needsClarification: true,
+      clarificationQuestion: output.clarificationQuestion as string,
+    };
+  }
+
   const crossDomainFacts = (output.crossDomainFacts ??
     output.cross_domain_facts ??
     output.a_plan) as CrossDomainFact[] | undefined;
@@ -533,12 +626,9 @@ function normalizeResponse(raw: unknown): InspirationRescueResponse {
     output.story_seeds ??
     output.b_plan) as StorySeed[] | undefined;
 
-  if (!Array.isArray(crossDomainFacts) || !Array.isArray(storySeeds)) {
-    throw new Error("回傳格式不完整，Balbo 的抽屜標籤可能貼反了。");
-  }
-
   return {
     runId: (root.runId ?? root.run_id ?? output.runId) as string | undefined,
+    needsClarification: false,
     balboOpening:
       ((output.balboOpening ??
         output.balbo_opening ??
@@ -559,8 +649,9 @@ function formatFactForClipboard(fact: CrossDomainFact) {
     `領域：${fact.domain}`,
     `意外連結：${fact.unexpectedLink}`,
     `內容切入：${fact.contentAngle}`,
+    fact.trendIntegration ? `時事雷達：${fact.trendIntegration}` : '',
     `Balbo：${fact.balboAside}`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function formatStoryForClipboard(seed: StorySeed) {
@@ -568,10 +659,12 @@ function formatStoryForClipboard(seed: StorySeed) {
     seed.title,
     `核心鉤子：${seed.hook}`,
     "三段式大綱：",
-    ...seed.outline.map((item, index) => `${index + 1}. ${item}`),
+    ...(seed.outline || []).map((item, index) => `${index + 1}. ${item}`),
     `形式：${seed.format}`,
+    seed.trendIntegration ? `時事雷達：${seed.trendIntegration}` : '',
+    seed.imagePrompt ? `視覺化咒語：${seed.imagePrompt}` : '',
     `踩雷與修正：${seed.riskAndFix}`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 async function copyText(text: string) {
