@@ -30,12 +30,10 @@ type Vulnerability = {
 
 type LogicCompassResponse = {
   runId?: string;
-  balboSummary: string;
-  riskScore: number;
-  vulnerabilities: Vulnerability[];
-  dataContradictions: string[];
-  validationExperiments: string[];
-  revisedDirection: string[];
+  balboOpening: string;
+  logicalContradictions: string[];
+  marketOptimismRisks: string[];
+  sharpQuestions: string[];
   balboClosing: string;
 };
 
@@ -46,43 +44,6 @@ type LogicCompassPanelProps = {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MAX_CHARS = 120000;
-
-const severityConfig: Record<
-  Severity,
-  { label: string; color: string; bg: string; border: string }
-> = {
-  low: {
-    label: "低風險",
-    color: "text-[#7ee7da]",
-    bg: "bg-[#14343a]/40",
-    border: "border-[#7ee7da]/30",
-  },
-  medium: {
-    label: "中風險",
-    color: "text-[#ffd6a3]",
-    bg: "bg-[#2e2517]/40",
-    border: "border-[#ffd6a3]/30",
-  },
-  high: {
-    label: "高風險",
-    color: "text-[#ffb86b]",
-    bg: "bg-[#2e1f10]/40",
-    border: "border-[#ffb86b]/35",
-  },
-  critical: {
-    label: "致命",
-    color: "text-[#ff8f8f]",
-    bg: "bg-[#2b1c1c]/60",
-    border: "border-[#ff8f8f]/40",
-  },
-};
-
-function riskScoreColor(score: number) {
-  if (score <= 3) return "text-[#7ee7da]";
-  if (score <= 6) return "text-[#ffd6a3]";
-  if (score <= 8) return "text-[#ffb86b]";
-  return "text-[#ff8f8f]";
-}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -346,107 +307,74 @@ export default function LogicCompassPanel({
 function LogicCompassResult({ result }: { result: LogicCompassResponse }) {
   return (
     <div className="space-y-6 pt-5">
-      {/* Risk score + Balbo summary */}
-      <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
-        {/* Score circle */}
-        <div className="flex flex-col items-center justify-center rounded-lg border border-[#b98f49]/30 bg-[#171b26] px-6 py-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#f6ead4]/55">
-            風險總分
-          </p>
-          <p
-            className={[
-              "mt-1 text-5xl font-bold tabular-nums",
-              riskScoreColor(result.riskScore),
-            ].join(" ")}
-          >
-            {result.riskScore}
-          </p>
-          <p className="mt-0.5 text-xs text-[#f6ead4]/45">/ 10</p>
-        </div>
-
-        {/* Summary */}
-        <div className="rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/40 p-4">
-          <p className="text-sm font-semibold text-[#7ee7da]">Balbo 總評：</p>
-          <p className="mt-1.5 text-sm leading-7 text-[#f6ead4]/85">
-            {result.balboSummary}
-          </p>
-        </div>
+      {/* Balbo opening (Highly affirming) */}
+      <div className="rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/40 p-4">
+        <p className="text-sm font-semibold text-[#7ee7da]">Balbo 的高度肯定：</p>
+        <p className="mt-1.5 text-sm leading-7 text-[#f6ead4]/85">
+          {result.balboOpening}
+        </p>
       </div>
 
-      {/* Vulnerabilities */}
-      {result.vulnerabilities.length > 0 ? (
-        <section aria-label="漏洞清單">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
-            發現的漏洞（{result.vulnerabilities.length} 項）
-          </p>
-          <div className="space-y-3">
-            {result.vulnerabilities.map((vuln, i) => (
-              <VulnerabilityCard key={i} index={i} vuln={vuln} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {/* Data contradictions */}
-      {result.dataContradictions.length > 0 ? (
-        <section aria-label="數據矛盾">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#ffb86b]">
-            數據矛盾（{result.dataContradictions.length} 項）
-          </p>
-          <div className="space-y-2">
-            {result.dataContradictions.map((item, i) => (
-              <div
-                key={i}
-                className="flex gap-3 rounded-lg border border-[#ffb86b]/25 bg-[#2e1f10]/40 p-3"
-              >
-                <ShieldAlert
-                  aria-hidden="true"
-                  className="mt-0.5 h-4 w-4 shrink-0 text-[#ffb86b]"
-                />
-                <p className="text-sm leading-6 text-[#ffd6a3]/85">{item}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {/* Validation experiments */}
-      <section aria-label="驗證實驗">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7ee7da]">
-          Balbo 建議的驗證實驗
+      {/* 1. Logical Contradictions */}
+      <section aria-label="羅盤指針偏移">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#ffb86b]">
+          1. 羅盤指針偏移：邏輯與常理的矛盾
         </p>
         <div className="space-y-2">
-          {result.validationExperiments.map((exp, i) => (
+          {result.logicalContradictions.map((item, i) => (
             <div
               key={i}
-              className="flex gap-3 rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/30 p-3"
+              className="flex gap-3 rounded-lg border border-[#ffb86b]/25 bg-[#2e1f10]/40 p-3"
             >
-              <Target
+              <ShieldAlert
                 aria-hidden="true"
-                className="mt-0.5 h-4 w-4 shrink-0 text-[#7ee7da]"
+                className="mt-0.5 h-4 w-4 shrink-0 text-[#ffb86b]"
               />
-              <p className="text-sm leading-6 text-[#f6ead4]/85">{exp}</p>
+              <p className="text-sm leading-6 text-[#ffd6a3]/85">{item}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Revised direction */}
-      <section aria-label="修正版方向">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
-          修正版方向
+      {/* 2. Market Optimism Risks */}
+      <section aria-label="迷霧警報">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#ff8f8f]">
+          2. 迷霧警報：數據與市場的過度樂觀
         </p>
         <div className="space-y-2">
-          {result.revisedDirection.map((dir, i) => (
+          {result.marketOptimismRisks.map((item, i) => (
             <div
               key={i}
-              className="flex gap-3 rounded-lg border border-[#b98f49]/25 bg-[#171b26] p-3"
+              className="flex gap-3 rounded-lg border border-[#ff8f8f]/25 bg-[#2b1c1c]/40 p-3"
             >
-              <CheckCircle
+              <AlertTriangle
                 aria-hidden="true"
-                className="mt-0.5 h-4 w-4 shrink-0 text-[#d6a85d]"
+                className="mt-0.5 h-4 w-4 shrink-0 text-[#ff8f8f]"
               />
-              <p className="text-sm leading-6 text-[#f6ead4]/85">{dir}</p>
+              <p className="text-sm leading-6 text-[#ffd6a3]/85">{item}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 3. Sharp Questions */}
+      <section aria-label="大叔的靈魂拷問">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7ee7da]">
+          3. 大叔的靈魂拷問（必考題）
+        </p>
+        <div className="grid gap-3">
+          {result.sharpQuestions.map((q, i) => (
+            <div
+              key={i}
+              className="flex gap-3 rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/30 p-4"
+            >
+              <Target
+                aria-hidden="true"
+                className="mt-0.5 h-4 w-4 shrink-0 text-[#7ee7da]"
+              />
+              <p className="text-sm font-medium italic leading-6 text-[#f6ead4]">
+                「{q}」
+              </p>
             </div>
           ))}
         </div>
@@ -454,7 +382,7 @@ function LogicCompassResult({ result }: { result: LogicCompassResponse }) {
 
       {/* Balbo closing */}
       <div className="rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/40 p-4">
-        <p className="text-sm font-semibold text-[#d6a85d]">Balbo 最後說：</p>
+        <p className="text-sm font-semibold text-[#d6a85d]">Balbo 悄悄話：</p>
         <p className="mt-1.5 text-sm leading-7 text-[#f6ead4]/85">
           {result.balboClosing}
         </p>
@@ -468,93 +396,6 @@ function LogicCompassResult({ result }: { result: LogicCompassResponse }) {
           複製結語
         </button>
       </div>
-    </div>
-  );
-}
-
-// ─── Vulnerability Card ───────────────────────────────────────────────────────
-
-function VulnerabilityCard({
-  vuln,
-  index,
-}: {
-  vuln: Vulnerability;
-  index: number;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const cfg = severityConfig[vuln.severity];
-
-  return (
-    <article
-      className={[
-        "rounded-lg border p-4 transition",
-        cfg.bg,
-        cfg.border,
-      ].join(" ")}
-    >
-      <button
-        className="flex w-full cursor-pointer items-start gap-3 text-left focus:outline-none"
-        onClick={() => setExpanded((prev) => !prev)}
-        type="button"
-        aria-expanded={expanded}
-      >
-        <span
-          className={[
-            "mt-0.5 rounded-md px-2 py-0.5 text-xs font-semibold",
-            cfg.color,
-            cfg.border,
-            "border",
-          ].join(" ")}
-        >
-          {cfg.label}
-        </span>
-        <span className="flex-1 text-sm font-medium leading-6 text-[#f6ead4]">
-          {index + 1}. {vuln.issue}
-        </span>
-        {expanded ? (
-          <ChevronUp
-            aria-hidden="true"
-            className="mt-0.5 h-4 w-4 shrink-0 text-[#f6ead4]/55"
-          />
-        ) : (
-          <ChevronDown
-            aria-hidden="true"
-            className="mt-0.5 h-4 w-4 shrink-0 text-[#f6ead4]/55"
-          />
-        )}
-      </button>
-
-      {expanded ? (
-        <div className="mt-3 space-y-3 border-t border-[#263958] pt-3">
-          <InfoRow label="為什麼重要" value={vuln.whyItMatters} />
-          <InfoRow label="Balbo 的追問" value={vuln.sharpQuestion} accent />
-          <InfoRow label="建議修正" value={vuln.fix} />
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function InfoRow({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div>
-      <p
-        className={[
-          "text-xs font-semibold",
-          accent ? "text-[#ffd6a3]" : "text-[#d6a85d]",
-        ].join(" ")}
-      >
-        {label}
-      </p>
-      <p className="mt-1 text-sm leading-6 text-[#f6ead4]/82">{value}</p>
     </div>
   );
 }

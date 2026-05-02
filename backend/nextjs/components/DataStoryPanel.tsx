@@ -31,14 +31,13 @@ type PitchSlide = {
 type DataStoryResponse = {
   runId?: string;
   balboOpening: string;
-  plainLanguageSummary: string[];
+  analogy: string;
   storyCopy: string;
-  pitchDeckSlides: PitchSlide[];
-  pressReleaseVersion: string;
-  riskNotes: string[];
+  slogans: string[];
+  balboClosing: string;
 };
 
-type ActiveView = "story" | "pitch" | "press" | "summary";
+// No activeView needed as we show all sections in a flow
 
 type DataStoryPanelProps = {
   apiEndpoint?: string;
@@ -67,7 +66,6 @@ export default function DataStoryPanel({
   const [result, setResult] = useState<DataStoryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeView, setActiveView] = useState<ActiveView>("story");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -123,7 +121,6 @@ export default function DataStoryPanel({
 
       const data = (await response.json()) as DataStoryResponse;
       setResult(data);
-      setActiveView("story");
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -307,47 +304,10 @@ export default function DataStoryPanel({
                   : "輸入資料，Balbo 幫你說人話"}
               </p>
             </div>
-
-            {result ? (
-              <div
-                aria-label="輸出檢視"
-                className="flex flex-wrap gap-1 rounded-lg border border-[#b98f49]/30 bg-[#151b2b] p-1"
-                role="tablist"
-              >
-                {(
-                  [
-                    { id: "story" as const, icon: BookOpen, label: "故事文案" },
-                    { id: "pitch" as const, icon: Zap, label: "Pitch Deck" },
-                    { id: "press" as const, icon: Newspaper, label: "公關稿" },
-                    { id: "summary" as const, icon: FileText, label: "摘要" },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.id}
-                    aria-selected={activeView === tab.id}
-                    className={[
-                      "flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm font-medium transition",
-                      activeView === tab.id
-                        ? "bg-[#d6a85d] text-[#111827]"
-                        : "text-[#f6ead4]/70 hover:text-[#f6ead4]",
-                    ].join(" ")}
-                    onClick={() => setActiveView(tab.id)}
-                    role="tab"
-                    type="button"
-                  >
-                    <tab.icon aria-hidden="true" className="h-4 w-4" />
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </div>
 
-          {isLoading ? <DataStoryLoadingState /> : null}
-          {!isLoading && !result ? <DataStoryEmptyState /> : null}
           {!isLoading && result ? (
             <DataStoryResult
-              activeView={activeView}
               result={result}
             />
           ) : null}
@@ -361,104 +321,66 @@ export default function DataStoryPanel({
 
 function DataStoryResult({
   result,
-  activeView,
 }: {
   result: DataStoryResponse;
-  activeView: ActiveView;
 }) {
   return (
-    <div className="pt-5">
+    <div className="space-y-6 pt-5">
       {/* Balbo opening */}
-      <div className="mb-5 rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/40 p-4">
-        <p className="text-sm font-semibold text-[#7ee7da]">Balbo 說：</p>
-        <p className="mt-1 leading-7 text-[#f6ead4]/85">{result.balboOpening}</p>
+      <div className="rounded-lg border border-[#7ee7da]/20 bg-[#14343a]/40 p-4">
+        <p className="text-sm font-semibold text-[#7ee7da]">Balbo 的招呼：</p>
+        <p className="mt-1.5 leading-7 text-[#f6ead4]/85">{result.balboOpening}</p>
       </div>
 
-      {/* Story copy */}
-      {activeView === "story" ? (
-        <TextResultBlock
-          label="故事型文案"
-          text={result.storyCopy}
-        >
-          {result.riskNotes.length > 0 ? (
-            <div className="mt-4 rounded-lg border border-[#ff8f8f]/30 bg-[#2b1c1c] p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#ff8f8f]">
-                Balbo 的風險提醒
-              </p>
-              <ul className="space-y-1.5">
-                {result.riskNotes.map((note, i) => (
-                  <li
-                    key={i}
-                    className="flex gap-2 text-sm leading-6 text-[#ffd6a3]/85"
-                  >
-                    <AlertTriangle
-                      aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[#ff8f8f]"
-                    />
-                    {note}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </TextResultBlock>
-      ) : null}
-
-      {/* Pitch deck */}
-      {activeView === "pitch" ? (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
-            Pitch Deck 投影片建議
+      {/* 1. Analogy */}
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
+          1. 大叔的白話文翻譯（核心價值比喻）
+        </p>
+        <div className="rounded-lg border border-[#b98f49]/30 bg-[#171b26] p-4">
+          <p className="text-base italic leading-7 text-[#f6ead4]/90">
+            「{result.analogy}」
           </p>
-          {result.pitchDeckSlides.map((slide, i) => (
+        </div>
+      </section>
+
+      {/* 2. Story Copy */}
+      <TextResultBlock
+        label="2. 萬花筒故事文案"
+        text={result.storyCopy}
+      />
+
+      {/* 3. Slogans */}
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7ee7da]">
+          3. 吸睛金句（Slogan）
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {result.slogans.map((slogan, i) => (
             <div
               key={i}
-              className="rounded-lg border border-[#b98f49]/30 bg-[#171b26] p-4"
+              className="flex items-center gap-3 rounded-lg border border-[#7ee7da]/30 bg-[#14343a]/30 p-4"
             >
-              <p className="text-sm font-semibold text-[#f6ead4]">
-                第 {i + 1} 張：{slide.title}
-              </p>
-              <ul className="mt-2 space-y-1.5">
-                {slide.bullets.map((bullet, j) => (
-                  <li
-                    key={j}
-                    className="flex gap-2 text-sm leading-6 text-[#f6ead4]/80"
-                  >
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ee7da]" />
-                    {bullet}
-                  </li>
-                ))}
-              </ul>
+              <Zap aria-hidden="true" className="h-4 w-4 shrink-0 text-[#7ee7da]" />
+              <p className="text-sm font-medium text-[#f6ead4]">{slogan}</p>
+              <button
+                className="ml-auto text-[#f6ead4]/40 hover:text-[#7ee7da]"
+                onClick={() => navigator.clipboard?.writeText(slogan)}
+                title="複製金句"
+              >
+                <Clipboard className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))}
         </div>
-      ) : null}
+      </section>
 
-      {/* Press release */}
-      {activeView === "press" ? (
-        <TextResultBlock
-          label="公關新聞稿版本"
-          text={result.pressReleaseVersion}
-        />
-      ) : null}
-
-      {/* Plain summary */}
-      {activeView === "summary" ? (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#d6a85d]">
-            白話摘要
+      {/* Balbo closing */}
+      {result.balboClosing ? (
+        <div className="rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4 text-center">
+          <p className="text-sm italic leading-7 text-[#d6a85d]">
+            {result.balboClosing}
           </p>
-          {result.plainLanguageSummary.map((point, i) => (
-            <div
-              key={i}
-              className="flex gap-3 rounded-lg border border-[#b98f49]/25 bg-[#171b26] p-4"
-            >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#7ee7da]/35 text-xs text-[#7ee7da]">
-                {i + 1}
-              </span>
-              <p className="text-sm leading-6 text-[#f6ead4]/85">{point}</p>
-            </div>
-          ))}
         </div>
       ) : null}
     </div>

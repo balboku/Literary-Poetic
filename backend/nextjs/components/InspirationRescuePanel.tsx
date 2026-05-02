@@ -32,9 +32,10 @@ type StorySeed = {
 
 type InspirationRescueResponse = {
   runId?: string;
-  balboNote: string;
+  balboOpening: string;
   crossDomainFacts: CrossDomainFact[];
   storySeeds: StorySeed[];
+  balboClosing: string;
 };
 
 type FavoriteItem =
@@ -140,7 +141,7 @@ export default function InspirationRescuePanel({
                 Balbo
               </p>
               <p className="mt-1 text-sm leading-6 text-[#f6ead4]/82">
-                {result?.balboNote ??
+                {result?.balboOpening ??
                   "卡住不是壞事，那通常只是腦袋在門口翻找鑰匙。"}
               </p>
             </div>
@@ -318,6 +319,15 @@ export default function InspirationRescuePanel({
                   seed={seed}
                 />
               ))}
+            </div>
+          ) : null}
+
+          {!isLoading && result?.balboClosing ? (
+            <div className="mt-6 rounded-lg border border-[#d6a85d]/30 bg-[#2e2517]/30 p-4">
+              <p className="text-sm font-semibold text-[#d6a85d]">Balbo 叮嚀：</p>
+              <p className="mt-1.5 text-sm italic leading-7 text-[#f6ead4]/85">
+                「{result.balboClosing}」
+              </p>
             </div>
           ) : null}
         </div>
@@ -512,13 +522,17 @@ function normalizeResponse(raw: unknown): InspirationRescueResponse {
 
   return {
     runId: (root.runId ?? root.run_id ?? output.runId) as string | undefined,
-    balboNote:
-      ((output.balboNote ??
-        output.balbo_note ??
-        output.balbo_opening) as string | undefined) ??
+    balboOpening:
+      ((output.balboOpening ??
+        output.balbo_opening ??
+        output.balboNote ??
+        output.balbo_note) as string | undefined) ??
       "有東西開始亮了，咱們來拆開看看。",
     crossDomainFacts,
     storySeeds,
+    balboClosing: (output.balboClosing ??
+      output.balbo_closing ??
+      output.closing) as string,
   };
 }
 

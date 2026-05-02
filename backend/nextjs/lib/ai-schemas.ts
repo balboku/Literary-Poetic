@@ -1,11 +1,12 @@
 import { z } from "zod";
 
+// ─── Inspiration Rescue ───────────────────────────────────────────────────────
+
 export const inspirationRequestSchema = z.object({
   topic: z.string().min(4).max(3000),
   contentFormat: z
     .enum(["longform", "short_video", "youtube", "campaign"])
     .default("longform"),
-  service: z.literal("inspiration_rescue").optional(),
 });
 
 export const crossDomainFactSchema = z.object({
@@ -25,56 +26,42 @@ export const storySeedSchema = z.object({
 });
 
 export const inspirationRescueSchema = z.object({
-  balboNote: z.string(),
+  balboOpening: z.string(),
   crossDomainFacts: z.array(crossDomainFactSchema).min(3).max(3),
   storySeeds: z.array(storySeedSchema).min(3).max(3),
+  balboClosing: z.string(),
 });
+
+// ─── Data Story ─────────────────────────────────────────────────────────────
 
 export const dataStoryRequestSchema = z.object({
   inputText: z.string().min(20).max(120000),
-  style: z
-    .enum(["warm", "humorous", "fantasy", "fundraising", "pr", "concise"])
-    .default("fundraising"),
+  style: z.string().default("一般大眾"),
 });
 
 export const dataStorySchema = z.object({
   balboOpening: z.string(),
-  plainLanguageSummary: z.array(z.string()).min(3).max(5),
-  storyCopy: z.string(),
-  pitchDeckSlides: z
-    .array(
-      z.object({
-        title: z.string(),
-        bullets: z.array(z.string()).min(2).max(5),
-      }),
-    )
-    .min(3)
-    .max(3),
-  pressReleaseVersion: z.string(),
-  riskNotes: z.array(z.string()),
+  analogy: z.string(), // 【大叔的白話文翻譯】
+  storyCopy: z.string(), // 【萬花筒故事文案】
+  slogans: z.array(z.string()).min(1).max(2), // 【吸睛金句】
+  balboClosing: z.string(),
 });
+
+// ─── Logic Compass ───────────────────────────────────────────────────────────
 
 export const logicCompassRequestSchema = z.object({
   businessModel: z.string().min(20).max(120000),
 });
 
 export const logicCompassSchema = z.object({
-  balboSummary: z.string(),
-  riskScore: z.number().min(1).max(10),
-  vulnerabilities: z.array(
-    z.object({
-      severity: z.enum(["low", "medium", "high", "critical"]),
-      issue: z.string(),
-      whyItMatters: z.string(),
-      sharpQuestion: z.string(),
-      fix: z.string(),
-    }),
-  ),
-  dataContradictions: z.array(z.string()),
-  validationExperiments: z.array(z.string()).min(3).max(3),
-  revisedDirection: z.array(z.string()).min(3).max(5),
-  balboClosing: z.string(),
+  balboOpening: z.string(), // 高度肯定
+  logicalContradictions: z.array(z.string()).min(1), // 【羅盤指針偏移】
+  marketOptimismRisks: z.array(z.string()).min(1), // 【迷霧警報】
+  sharpQuestions: z.array(z.string()).min(3).max(3), // 【大叔的靈魂拷問】
+  balboClosing: z.string(), // 回覆結語
 });
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type InspirationRequest = z.infer<typeof inspirationRequestSchema>;
 export type InspirationRescueOutput = z.infer<typeof inspirationRescueSchema>;
